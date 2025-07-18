@@ -842,11 +842,14 @@
   background: var(--border-light);
   outline: none;
   -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
   margin: 0.5rem 0;
 }
 
 .ig-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
+  -moz-appearance: none;
   appearance: none;
   width: 18px;
   height: 18px;
