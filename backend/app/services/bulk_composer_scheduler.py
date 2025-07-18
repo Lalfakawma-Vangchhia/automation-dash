@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models.bulk_composer_content import BulkComposerContent, BulkComposerStatus
 from app.models.social_account import SocialAccount
 from app.services.facebook_service import facebook_service
+from app.services.cloudinary_service import cloudinary_service
 
 logger = logging.getLogger(__name__)
 
@@ -79,35 +80,47 @@ class BulkComposerScheduler:
             # Update publish attempt tracking
             post.publish_attempts += 1
             post.last_publish_attempt = datetime.now(timezone.utc)
-            
-            # Post to Facebook
+
+            # --- NEW LOGIC: Separate photo and text-only posts ---
             if post.media_file:
-                # Photo post with media
-                result = await facebook_service.post_photo_to_facebook(
+                # Photo post
+                upload_result = cloudinary_service.upload_image_with_instagram_transform(post.media_file)
+                if upload_result.get("success"):
+                    image_url = upload_result["url"]
+                else:
+                    post.status = BulkComposerStatus.FAILED.value
+                    post.error_message = upload_result.get("error", "Cloudinary upload failed")
+                    db.commit()
+                    return
+
+                # Post to Facebook as photo
+                result = await facebook_service.create_post(
                     page_id=social_account.platform_user_id,
                     access_token=social_account.access_token,
                     message=post.caption,
-                    image_data=post.media_file
+                    media_url=image_url,
+                    media_type="photo"
                 )
             else:
-                # Text-only feed post
-                result = await facebook_service.post_text_to_facebook(
+                # Text-only post
+                result = await facebook_service.create_post(
                     page_id=social_account.platform_user_id,
                     access_token=social_account.access_token,
-                    message=post.caption
+                    message=post.caption,
+                    media_type="text"
                 )
-            
-            # Update post status
-            if result and result.get('id'):
+
+            # --- Improved error handling ---
+            if result and result.get('success') and result.get('post_id'):
                 post.status = BulkComposerStatus.PUBLISHED.value
-                post.facebook_post_id = result.get('id')
+                post.facebook_post_id = result.get('post_id')
                 post.error_message = None
-                logger.info(f"✅ Successfully published post {post.id} to Facebook: {result.get('id')}")
+                logger.info(f"✅ Successfully published post {post.id} to Facebook: {result.get('post_id')}")
             else:
+                logger.error(f"❌ Failed to publish post {post.id}: Facebook response: {result}")
+                fb_error = result.get('error') if isinstance(result, dict) else str(result)
                 post.status = BulkComposerStatus.FAILED.value
-                post.error_message = "Facebook API returned no post ID"
-                logger.error(f"❌ Failed to publish post {post.id}: No post ID returned")
-            
+                post.error_message = f"Facebook API error: {fb_error or 'No post ID returned'}"
             db.commit()
             
         except Exception as e:

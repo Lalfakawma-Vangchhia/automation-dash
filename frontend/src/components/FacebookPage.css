@@ -1,7 +1,7 @@
 /* FacebookPage.css - Apple-Inspired Premium Design */
 
 /* CSS Variables for Apple-inspired theme */
-:root {
+.facebook-page-container {
   --primary-color: #007AFF;
   --primary-light: rgba(0, 122, 255, 0.1);
   --primary-dark: #0056CC;

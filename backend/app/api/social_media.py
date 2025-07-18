@@ -157,6 +157,10 @@ class InstagramCarouselGenerationRequest(BaseModel):
     post_type: str = Field(default="feed", description="Type of post for sizing (feed, story, square, etc.)")
 
 
+class BulkComposerUpdateRequest(BaseModel):
+    caption: str = Field(..., description="Updated post caption")
+
+
 router = APIRouter(tags=["social media"])
 
 logger = logging.getLogger(__name__)
@@ -2597,10 +2601,12 @@ async def get_bulk_composer_content(
                     "scheduled_time": item.scheduled_time,
                     "status": item.status,
                     "has_media": bool(item.media_file),
+                    "media_file": item.media_file,
+                    "media_filename": item.media_filename,
                     "facebook_post_id": item.facebook_post_id,
                     "error_message": item.error_message,
                     "created_at": item.created_at.isoformat() if item.created_at else None,
-                    "schedule_batch_id": item.schedule_batch_id  # Include batch ID
+                    "schedule_batch_id": item.schedule_batch_id
                 }
                 for item in content
             ]
@@ -4021,4 +4027,30 @@ def bulk_schedule_instagram_posts(
         "success": len(failed_posts) == 0,
         "scheduled_posts": scheduled_posts,
         "failed_posts": failed_posts
+    }
+
+@router.put("/social/bulk-composer/content/{content_id}")
+async def update_bulk_composer_content(
+    content_id: int,
+    request: BulkComposerUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update the caption of a scheduled bulk composer content item (only if status is 'scheduled')."""
+    content = db.query(BulkComposerContent).filter(
+        BulkComposerContent.id == content_id,
+        BulkComposerContent.user_id == current_user.id
+    ).first()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+    if content.status != BulkComposerStatus.SCHEDULED.value:
+        raise HTTPException(status_code=400, detail="Only scheduled posts can be edited.")
+    content.caption = request.caption
+    db.commit()
+    db.refresh(content)
+    return {
+        "success": True,
+        "id": content.id,
+        "caption": content.caption,
+        "status": content.status
     }

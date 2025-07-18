@@ -184,6 +184,4 @@ token.json
 /backend/venv
 venv/
 
-/backend/app/main.py
-/backend/run.py
-/backend/alembic.ini 
+/frontend/InstagramPage.js

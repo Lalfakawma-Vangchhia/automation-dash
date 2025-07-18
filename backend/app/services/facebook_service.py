@@ -1001,18 +1001,17 @@ class FacebookService:
             import base64
             image_binary = base64.b64decode(base64_data)
             
-            # Create form data for multipart upload
+            # Create form data for multipart upload using aiohttp.FormData
             import io
-            files = {
-                'source': ('image.jpg', io.BytesIO(image_binary), 'image/jpeg'),
-                'message': (None, message),
-                'access_token': (None, access_token)
-            }
+            form_data = aiohttp.FormData()
+            form_data.add_field('source', io.BytesIO(image_binary), filename='image.jpg', content_type='image/jpeg')
+            form_data.add_field('message', message)
+            form_data.add_field('access_token', access_token)
             
             url = f"https://graph.facebook.com/v20.0/{page_id}/photos"
             
             async with aiohttp.ClientSession() as session:
-                async with session.post(url, data=files) as response:
+                async with session.post(url, data=form_data) as response:
                     if response.status == 200:
                         result = await response.json()
                         logger.info(f"Successfully posted photo to Facebook: {result.get('id')}")

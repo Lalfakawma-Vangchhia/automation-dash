@@ -80,7 +80,7 @@ function FacebookPage() {
     selectedPostIds: []
   });
 
-  const FACEBOOK_APP_ID = process.env.REACT_APP_FACEBOOK_APP_ID || '24054495060908418';
+  const FACEBOOK_APP_ID = process.env.REACT_APP_FACEBOOK_APP_ID || '697225659875731';
 
   // Mobile detection utility
   const isMobile = () => window.innerWidth <= 768;
@@ -1322,15 +1322,27 @@ function FacebookPage() {
             <div className="facebook-connected-content">
               {/* Page Selection */}
               {availablePages.length > 1 && (
-                <div className="page-selector">
-                  <h3 className="select-page-heading">Select a Page</h3>
-                  <div className="pages-grid">
-                    {availablePages.map((page) => (
-                      <div
-                        key={page.id}
-                        className={`page-card ${selectedPage?.id === page.id ? 'selected' : ''}`}
-                        onClick={() => {
-                          if (selectedPage?.id !== page.id) {
+                <div className="page-selector" style={{ marginTop: 25, marginBottom: 32, marginLeft: 48, display: 'flex', alignItems: 'center', gap: 24 }}>
+                  <div style={{ width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {selectedPage && selectedPage.profilePicture ? (
+                      <img src={selectedPage.profilePicture} alt={selectedPage.name} style={{ width: 56, height: 56, objectFit: 'cover' }} />
+                    ) : (
+                      <svg width="36" height="36" viewBox="0 0 24 24" fill="#cbd5e1">
+                        <circle cx="12" cy="12" r="10" />
+                        <circle cx="12" cy="10" r="4" fill="#fff" />
+                      </svg>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <label htmlFor="page-dropdown" style={{ fontWeight: 600, fontSize: 18, marginBottom: 2, fontFamily: 'Inter, Segoe UI, Arial, sans-serif' }}>Select a Page</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                      <select
+                        id="page-dropdown"
+                        className="page-dropdown"
+                        value={selectedPage?.id || ''}
+                        onChange={e => {
+                          const page = availablePages.find(p => p.id === e.target.value);
+                          if (page && selectedPage?.id !== page.id) {
                             setSelectedPage(page);
                             setAutoPostHistory([]);
                             setManualPostHistory([]);
@@ -1348,29 +1360,38 @@ function FacebookPage() {
                             setAutoReplyMessagesEnabled(true);
                             setAutoReplyMessagesLoading(false);
                             setAutoReplyMessagesError(null);
-                            // Re-fetch data for the new page
                             setTimeout(() => {
                               loadAutoReplySettings();
                               loadPostHistory();
                             }, 100);
                           }
                         }}
+                        style={{
+                          padding: '12px 16px',
+                          borderRadius: 7,
+                          border: '1.5px solid #b6bbc6',
+                          fontSize: 18,
+                          minWidth: 240,
+                          background: '#fff',
+                          fontWeight: 500,
+                          outline: 'none',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                          fontFamily: 'Inter, Segoe UI, Arial, sans-serif'
+                        }}
                       >
-                        <div className="page-avatar">
-                          {page.profilePicture ? (
-                            <img src={page.profilePicture} alt={page.name} />
-                          ) : (
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                            </svg>
-                          )}
-                        </div>
-                        <div className="page-info">
-                          <h4>{page.name}</h4>
-                          <p>{page.category} • {page.followerCount || 0} followers</p>
-                        </div>
-                      </div>
-                    ))}
+                        <option value="" disabled>Select a page...</option>
+                        {availablePages.map(page => (
+                          <option key={page.id} value={page.id}>
+                            {page.name} ({page.category})
+                          </option>
+                        ))}
+                      </select>
+                      {selectedPage && (
+                        <span style={{ color: '#64748b', fontSize: 16, fontWeight: 500, fontFamily: 'Inter, Segoe UI, Arial, sans-serif', marginLeft: 2 }}>
+                          {selectedPage.followerCount || 0} followers
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

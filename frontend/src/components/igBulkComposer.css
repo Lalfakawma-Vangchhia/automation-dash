@@ -7,32 +7,32 @@
 /* igBulkComposer.css - Instagram Premium Design System */
 
 /* CSS Variables - Enhanced with !important for better specificity */
-:root {
-  --primary-color: #e4405f !important;
-  --primary-light: rgba(228, 64, 95, 0.05) !important;
-  --primary-dark: #c13584 !important;
-  --success-color: #10b981 !important;
-  --success-light: rgba(16, 185, 129, 0.05) !important;
-  --warning-color: #f59e0b !important;
-  --warning-light: rgba(245, 158, 11, 0.05) !important;
-  --danger-color: #ef4444 !important;
-  --danger-light: rgba(239, 68, 68, 0.05) !important;
-  --text-primary: #1a1a1a !important;
-  --text-secondary: #666666 !important;
-  --text-muted: #999999 !important;
-  --border-color: #e8e8e8 !important;
-  --border-light: #f5f5f5 !important;
-  --card-bg: #ffffff !important;
-  --bg-primary: #ffffff !important;
-  --bg-secondary: #fafafa !important;
-  --bg-tertiary: #f5f5f5 !important;
-  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
-  --radius-sm: 0.375rem !important;
-  --radius-md: 0.5rem !important;
-  --radius-lg: 0.75rem !important;
-  --radius-xl: 1rem !important;
+.ig-bulk-composer {
+  --primary-color: #e4405f;
+  --primary-light: rgba(228, 64, 95, 0.05);
+  --primary-dark: #c13584;
+  --success-color: #10b981;
+  --success-light: rgba(16, 185, 129, 0.05);
+  --warning-color: #f59e0b;
+  --warning-light: rgba(245, 158, 11, 0.05);
+  --danger-color: #ef4444;
+  --danger-light: rgba(239, 68, 68, 0.05);
+  --text-primary: #1a1a1a;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --border-color: #e8e8e8;
+  --border-light: #f5f5f5;
+  --card-bg: #ffffff;
+  --bg-primary: #ffffff;
+  --bg-secondary: #fafafa;
+  --bg-tertiary: #f5f5f5;
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
 }
 
 /* Main Container */

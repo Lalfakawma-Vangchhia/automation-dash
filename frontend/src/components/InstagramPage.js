@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import IgBulkComposer from './igBulkComposer';
 import './InstagramPage.css';
 import ScheduledPostHistory from './ScheduledPostHistory';
+import { loadFacebookSDK } from './FacebookUtils';
 
 const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg'];
 const ACCEPTED_VIDEO_TYPES = ['video/mp4', 'video/quicktime'];
@@ -239,9 +240,10 @@ const InstagramPage = () => {
 
   useEffect(() => {
     if (isAuthenticated && !authLoading) {
-      checkLoginStatus();
-    initializeFacebookSDK();
-      checkGoogleDriveAvailability();
+      loadFacebookSDK(process.env.REACT_APP_FACEBOOK_APP_ID || '697225659875731').then(() => {
+        checkLoginStatus();
+        checkGoogleDriveAvailability();
+      });
     }
   }, [isAuthenticated, authLoading]);
 
