@@ -54,11 +54,33 @@ function Dashboard() {
           <circle cx="4" cy="4" r="2"/>
         </svg>
       ),
+    },
+    {
+      id: 5,
+      title: 'ThorSignia ChatBot',
+      description: 'A chatbot for thorsignia',
+      path: 'https://82a99f7c9188.ngrok-free.app/',
+      icon: (
+        <svg width="32" height="32" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="8" y="14" width="32" height="20" rx="10" fill="#f3f4f6" stroke="currentColor"/>
+          <ellipse cx="24" cy="34" rx="8" ry="4" fill="#f3f4f6" stroke="currentColor"/>
+          <circle cx="18" cy="24" r="2.5" fill="currentColor"/>
+          <circle cx="30" cy="24" r="2.5" fill="currentColor"/>
+          <rect x="22" y="28" width="4" height="2" rx="1" fill="currentColor"/>
+          <rect x="20" y="10" width="8" height="4" rx="2" fill="#f3f4f6" stroke="currentColor"/>
+          <rect x="12" y="8" width="4" height="4" rx="2" fill="#f3f4f6" stroke="currentColor"/>
+          <rect x="32" y="8" width="4" height="4" rx="2" fill="#f3f4f6" stroke="currentColor"/>
+        </svg>
+      ),
     }
   ];
 
   const handleModuleClick = (path) => {
-    navigate(path);
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      window.open(path, '_blank');
+    } else {
+      navigate(path);
+    }
   };
 
   const handleLogout = async () => {
