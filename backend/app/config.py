@@ -66,7 +66,16 @@ class Settings(BaseSettings):
     debug: bool = os.getenv("DEBUG", "True").lower() == "true"
 
     # CORS
-    cors_origins: List[str] = ["*"]
+    cors_origins: List[str] = [
+        "http://localhost:3000",
+        "https://localhost:3000", 
+        "http://localhost:3001",
+        "https://localhost:3001",
+        "http://127.0.0.1:3000",
+        "https://127.0.0.1:3000",
+        "http://127.0.0.1:3001", 
+        "https://127.0.0.1:3001"
+    ]
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
 

@@ -1,7 +1,12 @@
 // API Client for Backend Integration
 class ApiClient {
   constructor() {
-    this.baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+    // Determine if we should use HTTPS based on the current protocol
+    const isHttps = window.location.protocol === 'https:';
+    const protocol = isHttps ? 'https:' : 'http:';
+    const defaultURL = `${protocol}//localhost:8000/api`;
+    
+    this.baseURL = process.env.REACT_APP_API_URL || defaultURL;
     this.token = localStorage.getItem('authToken');
   }
 
@@ -161,7 +166,10 @@ class ApiClient {
   // Test connection to backend
   async testConnection() {
     try {
-      const response = await fetch(`${this.baseURL.replace('/api', '')}/health`);
+      const isHttps = window.location.protocol === 'https:';
+      const protocol = isHttps ? 'https:' : 'http:';
+      const healthURL = `${protocol}//localhost:8000/health`;
+      const response = await fetch(healthURL);
       return response.ok;
     } catch (error) {
       console.error('Backend connection test failed:', error);
@@ -256,6 +264,25 @@ class ApiClient {
   // Get Instagram media
   async getInstagramMedia(instagramUserId, limit = 25) {
     return this.request(`/social/instagram/media/${instagramUserId}?limit=${limit}`);
+  }
+
+  // Debug Instagram API
+  async debugInstagramApi(instagramUserId) {
+    return this.request(`/social/debug/instagram-api-test/${instagramUserId}`);
+  }
+
+  // Test Instagram post creation
+  async testInstagramPost(instagramUserId, testImageUrl, testCaption) {
+    return this.request(`/social/debug/instagram-test-post/${instagramUserId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        test_image_url: testImageUrl,
+        test_caption: testCaption
+      })
+    });
   }
 
   // Upload image to Cloudinary for Instagram
@@ -426,22 +453,37 @@ class ApiClient {
 
   // Unified Instagram post creation endpoint
   async createUnifiedInstagramPost(instagramUserId, options = {}) {
-    // Only include image_url and video_url if 
     const payload = {
       instagram_user_id: instagramUserId,
       caption: options.caption,
-      post_type: options.post_type || 'manual',
-      use_ai: options.use_ai || false,
-      prompt: options.prompt,
-      carousel_images: options.carousel_images || [],
+      post_type: options.post_type || 'feed',
+      media_type: options.media_type || 'image',
+      use_ai_text: options.use_ai_text || false,
+      use_ai_image: options.use_ai_image || false,
+      content_prompt: options.content_prompt,
+      image_prompt: options.image_prompt,
+      image_url: options.image_url,
+      video_url: options.video_url,
+      video_filename: options.video_filename,
+      media_file: options.media_file,
+      media_filename: options.media_filename,
+      is_reel: options.is_reel || false,
+      thumbnail_url: options.thumbnail_url,
+      thumbnail_filename: options.thumbnail_filename,
       location: options.location,
       hashtags: options.hashtags
     };
-    if (options.image_url) payload.image_url = options.image_url;
-    if (options.video_url) payload.video_url = options.video_url;
+    
+    // Remove undefined and null values
+    const cleanPayload = Object.fromEntries(
+      Object.entries(payload).filter(([key, value]) => 
+        value !== null && value !== undefined && value !== ''
+      )
+    );
+    
     return this.request('/social/instagram/create-post', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(cleanPayload),
     });
   }
 

@@ -50,7 +50,8 @@ class InstagramService:
     """Service for Instagram API operations and integrations."""
     
     def __init__(self):
-        self.graph_url = "https://graph.facebook.com/v20.0"
+        # Try v18.0 if v19.0 and v20.0 have issues
+        self.graph_url = "https://graph.facebook.com/v18.0"
         self.app_id = settings.facebook_app_id
         self.app_secret = settings.facebook_app_secret
         self._session = requests.Session()
@@ -255,6 +256,17 @@ class InstagramService:
             if not all([instagram_user_id, page_access_token, caption]):
                 return {"success": False, "error": "Missing required parameters"}
             
+            # Validate Instagram user ID format (should be numeric)
+            if not instagram_user_id.isdigit():
+                return {"success": False, "error": "Invalid Instagram user ID format"}
+            
+            # Validate access token format (should be a long string)
+            if len(page_access_token) < 50:
+                return {"success": False, "error": "Invalid access token format"}
+            
+            logger.info(f"Creating Instagram post for user {instagram_user_id}")
+            logger.info(f"Caption length: {len(caption)} characters")
+            
             if video_filename and not video_file_path:
                 video_file_path = os.path.join("temp_images", video_filename)
             
@@ -303,14 +315,50 @@ class InstagramService:
                         if upload_result["success"]:
                             media_params['cover_url'] = upload_result["url"]
             else:
+                if not image_url or not image_url.strip():
+                    return {"success": False, "error": "Image URL is required for photo posts"}
                 if not image_url.startswith(('http://', 'https://')):
                     return {"success": False, "error": "Image URL must be a valid HTTP/HTTPS URL"}
-                media_params['image_url'] = image_url
+                
+                # Validate URL format
+                try:
+                    from urllib.parse import urlparse
+                    parsed_url = urlparse(image_url)
+                    if not parsed_url.scheme or not parsed_url.netloc:
+                        return {"success": False, "error": "Invalid image URL format"}
+                    
+                    # Test if URL is accessible
+                    import requests
+                    try:
+                        test_response = requests.head(image_url, timeout=10)
+                        if test_response.status_code != 200:
+                            logger.warning(f"Image URL returned status {test_response.status_code}: {image_url}")
+                    except Exception as url_test_error:
+                        logger.warning(f"Could not test image URL accessibility: {url_test_error}")
+                        
+                except Exception as e:
+                    return {"success": False, "error": f"Invalid image URL: {str(e)}"}
+                
+                media_params['image_url'] = image_url.strip()
+                logger.info(f"Using image URL: {image_url}")
             
             # Create media
-            response = self._make_request('POST', media_url, data=media_params)
-            media_result = response.json()
-            creation_id = media_result.get('id')
+            logger.info(f"Creating Instagram media with params: {media_params}")
+            logger.info(f"Media URL: {media_url}")
+            
+            try:
+                response = self._make_request('POST', media_url, data=media_params)
+                media_result = response.json()
+                logger.info(f"Media creation response: {media_result}")
+                creation_id = media_result.get('id')
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Instagram media creation failed: {e}")
+                if hasattr(e, 'response') and e.response:
+                    error_data = e.response.json() if e.response.content else {}
+                    error_msg = error_data.get('error', {}).get('message', str(e))
+                    logger.error(f"Instagram API error details: {error_data}")
+                    return {"success": False, "error": f"Instagram API Error: {error_msg}"}
+                raise e
             
             if not creation_id:
                 return {"success": False, "error": "No creation ID returned from Instagram API."}
