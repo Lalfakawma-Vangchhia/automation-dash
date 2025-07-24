@@ -40,6 +40,28 @@ const InstagramPage = () => {
   const [generatingCaption, setGeneratingCaption] = useState(false);
   const [rateLimitCooldown, setRateLimitCooldown] = useState(0);
 
+  // Strategy Template State
+  const [strategyData, setStrategyData] = useState({
+    promptTemplate: '',
+    brandName: '',
+    hookIdea: '',
+    features: '',
+    location: '',
+    phone: '',
+    website: '',
+    callToAction: '',
+    imagePrompt: '',
+    customStrategyTemplate: ''
+  });
+
+  const [showStrategyModal, setShowStrategyModal] = useState(false);
+  const [strategyTemplates, setStrategyTemplates] = useState([
+    { id: 'default', name: 'Default Template', prompt: 'Generate a catchy Instagram caption for this post.' },
+    { id: 'product', name: 'Product Showcase', prompt: 'Create an engaging caption highlighting the key features and benefits of this product.' },
+    { id: 'event', name: 'Event Promotion', prompt: 'Write an exciting caption to promote this event, including date, time, and location.' },
+    { id: 'custom', name: 'Custom Template', prompt: '' }
+  ]);
+
   // Carousel State
   const [carouselImages, setCarouselImages] = useState([]); // URLs
   const [carouselFiles, setCarouselFiles] = useState([]); // File objects

@@ -12,6 +12,13 @@ function IgBulkComposer({ selectedAccount, onClose }) {
   const [strategyData, setStrategyData] = useState({
     promptTemplate: '',
     customStrategyTemplate: '',
+    brandName: '',
+    hookIdea: '',
+    features: '',
+    location: '',
+    phone: '',
+    website: '',
+    callToAction: '',
     imagePrompt: '',
     startDate: '',
     endDate: '',
@@ -327,104 +334,125 @@ function IgBulkComposer({ selectedAccount, onClose }) {
       alert('Please select at least one row to generate captions for.');
       return;
     }
+    
     if (!strategyData.promptTemplate) {
       alert('Please select a strategy template first.');
       return;
     }
+    
     setIsScheduling(true);
     setScheduleProgress(0);
+    
     try {
       const selectedComposerRows = composerRows.filter(row => selectedRows.includes(row.id));
-      let response;
+      const captions = [];
+      
+      // Create the base prompt based on the selected template type
+      let prompt = '';
       
       if (strategyData.promptTemplate === 'custom') {
-        if (!(strategyData.customStrategyTemplate || '').trim()) {
-          alert('Please enter a custom strategy template first.');
-          setIsScheduling(false);
-          return;
-        }
-        
-        // Use custom strategy template for bulk generation
-        response = await apiClient.generateBulkCaptions(
-          strategyData.customStrategyTemplate,
-          selectedComposerRows.map(row => row.scheduledDate),
-          2000
-        );
+        // Build a detailed prompt for custom templates
+        prompt = `
+          Brand Name: ${strategyData.brandName || 'Not specified'}
+          Hook Idea: ${strategyData.hookIdea || 'Not specified'}
+          Key Features: ${strategyData.features || 'Not specified'}
+          Location: ${strategyData.location || 'Not specified'}
+          Phone: ${strategyData.phone || 'Not specified'}
+          Website: ${strategyData.website || 'Not specified'}
+          Call to Action: ${strategyData.callToAction || 'Not specified'}
+          Image Prompt: ${strategyData.imagePrompt || 'Not specified'}
+          
+          Custom Template:
+          ${strategyData.customStrategyTemplate || ''}
+        `;
       } else {
-        // Use predefined strategy template
+        // Use the selected predefined template
         const selectedTemplate = promptTemplates.find(t => t.prompt === strategyData.promptTemplate);
         if (!selectedTemplate) {
           alert('Invalid strategy template selected.');
           setIsScheduling(false);
           return;
         }
-        
-        // Generate captions using the predefined template for selected rows only
-        const captions = [];
-        for (let i = 0; i < selectedComposerRows.length; i++) {
-          try {
-            const context = selectedComposerRows[i].scheduledDate;
-            const captionResponse = await apiClient.generateInstagramCaption(selectedTemplate.prompt);
-            
-            if (captionResponse.success) {
-              captions.push({
-                content: captionResponse.content,
-                context: context,
-                success: true
-              });
-            } else {
-              captions.push({
-                content: `Failed to generate caption for: ${context}`,
-                context: context,
-                success: false,
-                error: captionResponse.error || 'Unknown error'
-              });
-            }
-          } catch (error) {
-            console.error(`Error generating caption for context ${selectedComposerRows[i].scheduledDate}:`, error);
+        prompt = selectedTemplate.prompt;
+      }
+      
+      // Generate captions for each selected row
+      for (let i = 0; i < selectedComposerRows.length; i++) {
+        try {
+          const row = selectedComposerRows[i];
+          const context = {
+            scheduledDate: row.scheduledDate,
+            // Add any other context you want to include
+          };
+          
+          // Add context to the prompt
+          const fullPrompt = `${prompt}\n\nContext: ${JSON.stringify(context, null, 2)}`;
+          
+          const captionResponse = await apiClient.generateInstagramCaption(fullPrompt);
+          
+          if (captionResponse.success) {
             captions.push({
-              content: `Failed to generate caption for: ${selectedComposerRows[i].scheduledDate}`,
-              context: selectedComposerRows[i].scheduledDate,
+              content: captionResponse.content || captionResponse.generated_text || 'No content generated',
+              context: context.scheduledDate,
+              success: true
+            });
+          } else {
+            console.error('Caption generation failed:', captionResponse.error);
+            captions.push({
+              content: `Failed to generate caption for: ${context.scheduledDate}`,
+              context: context.scheduledDate,
               success: false,
-              error: error.message
+              error: captionResponse.error || 'Unknown error'
             });
           }
+        } catch (error) {
+          console.error('Error generating caption:', error);
+          captions.push({
+            content: `Error generating caption for: ${selectedComposerRows[i].scheduledDate}`,
+            context: selectedComposerRows[i].scheduledDate,
+            success: false,
+            error: error.message
+          });
         }
         
-        response = {
-          success: true,
-          captions: captions,
-          total_generated: captions.filter(c => c.success).length
-        };
+        // Update progress
+        setScheduleProgress(Math.round(((i + 1) / selectedComposerRows.length) * 100));
       }
-
-      if (response.success && response.captions) {
-        // Update only selected rows with generated captions
-        setComposerRows(prev => 
-          prev.map(row => {
-            if (selectedRows.includes(row.id)) {
-              // Find the corresponding caption for this selected row
-              const selectedIndex = selectedComposerRows.findIndex(selectedRow => selectedRow.id === row.id);
-              const generatedCaption = response.captions[selectedIndex];
-              if (generatedCaption && generatedCaption.success) {
-                return {
-                  ...row,
-                  caption: generatedCaption.content,
-                  status: row.mediaFile || row.mediaPreview ? 'ready' : 'draft'
-                };
-              }
-            }
-            return row;
-          })
-        );
-
-        alert(`Successfully generated ${response.total_generated || response.captions.filter(c => c.success).length} captions for selected rows!`);
+      
+      // Update the rows with generated captions
+      setComposerRows(prev => 
+        prev.map(row => {
+          if (!selectedRows.includes(row.id)) return row;
+          
+          const caption = captions.find(c => c.context === row.scheduledDate);
+          if (caption && caption.success) {
+            return {
+              ...row,
+              caption: caption.content,
+              status: 'ready'
+            };
+          }
+          return row;
+        })
+      );
+      
+      // Show success/failure summary
+      const successCount = captions.filter(c => c.success).length;
+      const failedCount = captions.length - successCount;
+      
+      let message = '';
+      if (successCount > 0 && failedCount === 0) {
+        message = `Successfully generated captions for ${successCount} ${successCount === 1 ? 'post' : 'posts'}.`;
+      } else if (successCount > 0) {
+        message = `Generated ${successCount} captions successfully, but failed to generate ${failedCount}.`;
       } else {
-        alert('Failed to generate captions. Please try again.');
+        message = 'Failed to generate any captions. Please try again.';
       }
+      
+      alert(message);
     } catch (error) {
-      console.error('Error generating captions:', error);
-      alert('Failed to generate captions. Please try again.');
+      console.error('Unexpected error in handleGenerateAllCaptions:', error);
+      alert('An unexpected error occurred while generating captions. Please try again.');
     } finally {
       setIsScheduling(false);
       setScheduleProgress(0);
@@ -1085,20 +1113,86 @@ function IgBulkComposer({ selectedAccount, onClose }) {
                   </select>
                 </div>
             {strategyData.promptTemplate === 'custom' && (
+              <div className="ig-form-group">
+                <label>Brand Information</label>
+                <div className="ig-form-row">
                   <div className="ig-form-group">
-                <label>Custom Strategy Template</label>
-                <textarea
-                  value={strategyData.customStrategyTemplate}
-                  onChange={(e) => handleStrategyChange('customStrategyTemplate', e.target.value)}
-                  placeholder="Enter your custom strategy template. This will be used by AI to generate captions that follow your specific style and approach..."
+                    <input
+                      type="text"
+                      value={strategyData.brandName}
+                      onChange={(e) => handleStrategyChange('brandName', e.target.value)}
+                      placeholder="Brand Name"
                       className="ig-form-input"
-                  rows="3"
                     />
-                <small className="ig-form-help">
-                  Describe your content strategy, tone, style, and any specific requirements for your posts.
-                </small>
                   </div>
-                )}
+                  <div className="ig-form-group">
+                    <input
+                      type="text"
+                      value={strategyData.hookIdea}
+                      onChange={(e) => handleStrategyChange('hookIdea', e.target.value)}
+                      placeholder="Hook Idea (e.g., Tired of the shore?)"
+                      className="ig-form-input"
+                    />
+                  </div>
+                </div>
+                
+                <div className="ig-form-group">
+                  <label>Features (one per line)</label>
+                  <textarea
+                    value={strategyData.features}
+                    onChange={(e) => handleStrategyChange('features', e.target.value)}
+                    placeholder="✅ Feature 1\n✅ Feature 2\n✅ Feature 3"
+                    className="ig-form-input"
+                    rows="3"
+                  />
+                </div>
+
+                <div className="ig-form-row">
+                  <div className="ig-form-group">
+                    <input
+                      type="text"
+                      value={strategyData.location}
+                      onChange={(e) => handleStrategyChange('location', e.target.value)}
+                      placeholder="Location"
+                      className="ig-form-input"
+                    />
+                  </div>
+                  <div className="ig-form-group">
+                    <input
+                      type="text"
+                      value={strategyData.phone}
+                      onChange={(e) => handleStrategyChange('phone', e.target.value)}
+                      placeholder="Phone Number"
+                      className="ig-form-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="ig-form-group">
+                  <input
+                    type="text"
+                    value={strategyData.website}
+                    onChange={(e) => handleStrategyChange('website', e.target.value)}
+                    placeholder="Website URL"
+                    className="ig-form-input"
+                  />
+                </div>
+
+                <div className="ig-form-group">
+                  <textarea
+                    value={strategyData.callToAction}
+                    onChange={(e) => handleStrategyChange('callToAction', e.target.value)}
+                    placeholder="Call to Action (e.g., Book your appointment today!)"
+                    className="ig-form-input"
+                    rows="2"
+                  />
+                </div>
+
+                <small className="ig-form-help">
+                  This information will be used to generate captions that follow your brand's style and approach.
+                </small>
+              </div>
+            )}
             <div className="ig-form-row">
                 <div className="ig-form-group">
                   <label>Start Date</label>

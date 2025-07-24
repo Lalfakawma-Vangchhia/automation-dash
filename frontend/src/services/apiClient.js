@@ -576,13 +576,35 @@ class ApiClient {
   }
 
   async generateInstagramCaption(prompt) {
-    const response = await this.request('/social/instagram/generate-caption', {
-      method: 'POST',
-      body: JSON.stringify({
-        prompt: prompt
-      }),
-    });
-    return response;
+    try {
+      const response = await this.request('/social/instagram/generate-caption', {
+        method: 'POST',
+        body: JSON.stringify({
+          prompt: prompt
+        }),
+      });
+      
+      if (!response || !response.content) {
+        console.error('Invalid response format from caption generation:', response);
+        return { 
+          success: false, 
+          error: 'Invalid response format from server' 
+        };
+      }
+      
+      return { 
+        success: true, 
+        content: response.content,
+        ...response 
+      };
+    } catch (error) {
+      console.error('Error generating Instagram caption:', error);
+      return { 
+        success: false, 
+        error: error.message || 'Failed to generate caption',
+        details: error.response?.data || error.toString()
+      };
+    }
   }
 
   async generateCaptionWithStrategy(customStrategy, context = "", maxLength = 2000) {
