@@ -1,6 +1,9 @@
 // API Client for Backend Integration
 class ApiClient {
   constructor() {
+    // For development, you can force HTTP by uncommenting the next line:
+    // const defaultURL = 'http://localhost:8000/api';
+    
     // Determine if we should use HTTPS based on the current protocol
     const isHttps = window.location.protocol === 'https:';
     const protocol = isHttps ? 'https:' : 'http:';
@@ -8,6 +11,8 @@ class ApiClient {
     
     this.baseURL = process.env.REACT_APP_API_URL || defaultURL;
     this.token = localStorage.getItem('authToken');
+    
+    console.log('🔍 DEBUG: API Client initialized with baseURL:', this.baseURL);
   }
 
   setToken(token) {
@@ -171,10 +176,13 @@ class ApiClient {
       const isHttps = window.location.protocol === 'https:';
       const protocol = isHttps ? 'https:' : 'http:';
       const healthURL = `${protocol}//localhost:8000/health`;
+      console.log('Testing backend connection to:', healthURL);
       const response = await fetch(healthURL);
+      console.log('Backend connection test result:', response.status, response.ok);
       return response.ok;
     } catch (error) {
       console.error('Backend connection test failed:', error);
+      console.error('This is likely due to SSL certificate issues. Please visit https://localhost:8000/health in your browser and accept the certificate.');
       return false;
     }
   }
@@ -206,6 +214,33 @@ class ApiClient {
 
   async logout() {
     this.setToken(null);
+  }
+
+  // Google OAuth endpoints
+  async getGoogleOAuthUrl() {
+    return this.request('/auth/google/url');
+  }
+
+  async googleOAuthCallback(code, redirectUri) {
+    const response = await this.request('/auth/google/callback', {
+      method: 'POST',
+      body: JSON.stringify({
+        code: code,
+        redirect_uri: redirectUri
+      }),
+    });
+    
+    if (response.access_token) {
+      this.setToken(response.access_token);
+    }
+    
+    return response;
+  }
+
+  async disconnectGoogleAccount() {
+    return this.request('/auth/google/disconnect', {
+      method: 'DELETE',
+    });
   }
 
   // Facebook endpoints
@@ -548,10 +583,21 @@ class ApiClient {
 
   async getInstagramAccounts() {
     // This assumes your backend endpoint is /api/social/accounts and returns only Instagram accounts
-    const response = await this.request('/social/accounts', {
-      method: 'GET',
-    });
-    return response;
+    try {
+      console.log('🔍 DEBUG: Fetching Instagram accounts from /social/accounts');
+      const response = await this.request('/social/accounts', {
+        method: 'GET',
+      });
+      console.log('🔍 DEBUG: Instagram accounts response:', response);
+      return response;
+    } catch (error) {
+      console.error('🔍 DEBUG: Failed to fetch Instagram accounts:', error);
+      if (error.message.includes('Failed to fetch')) {
+        console.error('🔍 DEBUG: This is likely a CORS or SSL certificate issue.');
+        console.error('🔍 DEBUG: Please visit https://localhost:8000/health and https://localhost:8000/api/social/accounts in your browser to accept the SSL certificate.');
+      }
+      throw error;
+    }
   }
 
   // Get posts
