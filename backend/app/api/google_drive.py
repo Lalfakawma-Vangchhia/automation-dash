@@ -24,8 +24,8 @@ router = APIRouter(prefix="/api/google-drive", tags=["Google Drive"])
 
 # Google Drive API scopes
 SCOPES = [
-    'https://www.googleapis.com/auth/drive.readonly',
-    'https://www.googleapis.com/auth/drive.file'
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/drive.readonly'
 ]
 
 # Get settings
@@ -148,6 +148,71 @@ async def get_auth_token(current_user: User = Depends(get_current_user)):
             detail=f"Failed to authenticate with Google Drive: {str(e)}"
         )
 
+@router.get("/debug")
+async def debug_google_drive(current_user: User = Depends(get_current_user)):
+    """Debug endpoint to test Google Drive connectivity."""
+    try:
+        service = get_google_drive_service()
+        
+        # Test basic connectivity
+        about = service.about().get(fields="user,storageQuota").execute()
+        user_info = about.get("user", {})
+        storage_info = about.get("storageQuota", {})
+        
+        # Try to list ALL files (without filters)
+        all_files = service.files().list(
+            pageSize=50,  # Increased to see more files
+            fields="files(id, name, mimeType, owners, shared, size)"
+        ).execute()
+        
+        files_list = all_files.get('files', [])
+        
+        # Categorize files by type
+        file_types = {}
+        for file in files_list:
+            mime_type = file.get('mimeType', 'unknown')
+            if mime_type not in file_types:
+                file_types[mime_type] = []
+            file_types[mime_type].append({
+                'name': file.get('name'),
+                'id': file.get('id'),
+                'size': file.get('size')
+            })
+        
+        # Count image and video files specifically
+        image_files = [f for f in files_list if f.get('mimeType', '').startswith('image/')]
+        video_files = [f for f in files_list if f.get('mimeType', '').startswith('video/')]
+        
+        # Show all MIME types found
+        mime_types_found = list(file_types.keys())
+        
+        return {
+            "success": True,
+            "user": {
+                "email": user_info.get("emailAddress"),
+                "name": user_info.get("displayName")
+            },
+            "storage": {
+                "total": storage_info.get("limit"),
+                "used": storage_info.get("usage"),
+                "available": storage_info.get("usageInDrive")
+            },
+            "total_files_found": len(files_list),
+            "image_files_count": len(image_files),
+            "video_files_count": len(video_files),
+            "file_types_summary": file_types,
+            "mime_types_found": mime_types_found,
+            "sample_files": files_list[:10],  # Show more sample files
+            "message": "Google Drive connection successful"
+        }
+    except Exception as e:
+        logger.error(f"Google Drive debug error: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Google Drive connection failed"
+        }
+
 @router.get("/files")
 async def list_files(
     mime_type: Optional[str] = None,
@@ -157,22 +222,45 @@ async def list_files(
     try:
         service = get_google_drive_service()
         
-        # Build query
-        query = "trashed=false"
+        # Build query - be more inclusive for readonly scope
+        query_parts = ["trashed=false"]
+        
+        # Add MIME type filter if specified
         if mime_type:
-            query += f" and mimeType contains '{mime_type}'"
+            if mime_type == 'image/*':
+                query_parts.append("(mimeType contains 'image/')")
+            elif mime_type == 'video/*':
+                query_parts.append("(mimeType contains 'video/')")
+            else:
+                query_parts.append(f"mimeType contains '{mime_type}'")
+        
+        # For readonly scope, we can access all files the user has access to
+        # Remove the restrictive owner filter that was causing issues
+        # query_parts.append("(owners in me or sharedWithMe=true)")
+        
+        query = " and ".join(query_parts)
+        
+        logger.info(f"Google Drive query: {query}")
         
         results = service.files().list(
             q=query,
-            pageSize=50,
-            fields="nextPageToken, files(id, name, mimeType, size, modifiedTime, thumbnailLink)"
+            pageSize=100,  # Increased page size
+            fields="nextPageToken, files(id, name, mimeType, size, modifiedTime, thumbnailLink, owners, shared, parents, webViewLink)",
+            orderBy="modifiedTime desc"  # Show most recent files first
         ).execute()
         
         files = results.get('files', [])
+        logger.info(f"Found {len(files)} files in Google Drive")
+        
+        # Log some file details for debugging
+        for i, file in enumerate(files[:5]):  # Log first 5 files
+            logger.info(f"File {i+1}: {file.get('name')} ({file.get('mimeType')}) - Owners: {file.get('owners')}")
         
         return {
             "success": True,
-            "files": files
+            "files": files,
+            "query": query,
+            "total_files": len(files)
         }
     except Exception as e:
         logger.error(f"Error listing Google Drive files: {e}")
@@ -560,3 +648,41 @@ async def get_google_drive_token(current_user: User = Depends(get_current_user))
             status_code=500,
             detail=f"Failed to get Google Drive token: {str(e)}"
         ) 
+
+@router.get("/test-images")
+async def test_image_files(current_user: User = Depends(get_current_user)):
+    """Test endpoint to specifically list image and video files."""
+    try:
+        service = get_google_drive_service()
+        
+        # Test for image files
+        image_query = "trashed=false and (mimeType contains 'image/')"
+        image_results = service.files().list(
+            q=image_query,
+            pageSize=10,
+            fields="files(id, name, mimeType, size, modifiedTime)"
+        ).execute()
+        
+        # Test for video files
+        video_query = "trashed=false and (mimeType contains 'video/')"
+        video_results = service.files().list(
+            q=video_query,
+            pageSize=10,
+            fields="files(id, name, mimeType, size, modifiedTime)"
+        ).execute()
+        
+        return {
+            "success": True,
+            "image_files": image_results.get('files', []),
+            "video_files": video_results.get('files', []),
+            "image_count": len(image_results.get('files', [])),
+            "video_count": len(video_results.get('files', [])),
+            "image_query": image_query,
+            "video_query": video_query
+        }
+    except Exception as e:
+        logger.error(f"Error testing image/video files: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        } 

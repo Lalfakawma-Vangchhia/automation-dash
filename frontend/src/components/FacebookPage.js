@@ -72,6 +72,15 @@ function FacebookPage() {
   // Add new state for auto-reply message rule
   const [autoReplyMessageRule, setAutoReplyMessageRule] = useState(null);
 
+  // Add missing autoReplySettings state
+  // eslint-disable-next-line no-unused-vars
+  const [autoReplySettings, setAutoReplySettings] = useState({
+    enabled: false,
+    template: 'Thank you for your comment! We appreciate your engagement. 😊',
+    ruleId: null,
+    selectedPostIds: []
+  });
+
   const FACEBOOK_APP_ID = process.env.REACT_APP_FACEBOOK_APP_ID || '697225659875731';
 
   // Mobile detection utility
@@ -241,6 +250,30 @@ function FacebookPage() {
     }
   };
 
+  const debugGoogleDrive = async () => {
+    try {
+      console.log('🔍 Testing Google Drive connectivity...');
+      const debugInfo = await apiClient.debugGoogleDrive();
+      console.log('🔍 Google Drive Debug Info:', debugInfo);
+      setConnectionStatus(`Google Drive Debug: ${debugInfo.message} - Found ${debugInfo.total_files_found} files`);
+    } catch (error) {
+      console.error('🔍 Google Drive Debug Error:', error);
+      setConnectionStatus(`Google Drive Debug Error: ${error.message}`);
+    }
+  };
+
+  const testGoogleDriveImages = async () => {
+    try {
+      console.log('🖼️ Testing Google Drive images/videos...');
+      const testInfo = await apiClient.testGoogleDriveImages();
+      console.log('🖼️ Google Drive Image/Video Test:', testInfo);
+      setConnectionStatus(`Image/Video Test: ${testInfo.image_count} images, ${testInfo.video_count} videos found`);
+    } catch (error) {
+      console.error('🖼️ Google Drive Image/Video Test Error:', error);
+      setConnectionStatus(`Image/Video Test Error: ${error.message}`);
+    }
+  };
+
   const disconnectGoogleDrive = async () => {
     try {
       await apiClient.disconnectGoogleDrive();
@@ -272,29 +305,61 @@ function FacebookPage() {
         return;
       }
 
+      let resolved = false;
+      
       // Listen for messages from the popup
       const messageHandler = (event) => {
-        if (event.origin !== window.location.origin) return;
+        // Be more permissive with origins due to Google's OAuth flow
+        if (!event.data || resolved) return;
         
         if (event.data.success) {
+          resolved = true;
           window.removeEventListener('message', messageHandler);
+          clearInterval(timer);
           resolve();
         } else if (event.data.error) {
+          resolved = true;
           window.removeEventListener('message', messageHandler);
+          clearInterval(timer);
           reject(new Error(event.data.error));
         }
       };
 
       window.addEventListener('message', messageHandler);
 
-      // Also poll for popup closure as fallback
+      // Poll for popup closure as fallback (with Cross-Origin-Opener-Policy handling)
       const timer = setInterval(() => {
-        if (popup.closed) {
+        try {
+          if (popup.closed) {
+            if (!resolved) {
+              resolved = true;
+              clearInterval(timer);
+              window.removeEventListener('message', messageHandler);
+              // Don't assume success immediately - let the main function handle retries
+              resolve();
+            }
+          }
+        } catch (e) {
+          // Cross-Origin-Opener-Policy may prevent accessing popup.closed
+          // In this case, assume the popup process is ongoing
+          console.warn('Cannot check popup status due to Cross-Origin-Opener-Policy:', e);
+        }
+      }, 1000); // Increased interval to 1 second
+
+      // Timeout after 60 seconds
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
           clearInterval(timer);
           window.removeEventListener('message', messageHandler);
-          resolve(); // Assume success if popup closed without error message
+          try {
+            popup.close();
+          } catch (e) {
+            // Ignore errors when closing popup
+          }
+          reject(new Error('Authentication timeout. Please try again.'));
         }
-      }, 500);
+      }, 60000);
     });
   };
 
@@ -649,16 +714,34 @@ function FacebookPage() {
         if (authResponse.consent_url) {
           // 3️⃣ Open popup and wait for completion
           await openDriveAuthPopup(authResponse.consent_url);
+          
+          // 4️⃣ Wait a bit for the OAuth callback to complete
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
 
-      // 4️⃣ After popup closes, re-check authentication status
-      const finalStatus = await apiClient.getGoogleDriveStatus();
+      // 5️⃣ After popup closes, re-check authentication status with retries
+      let finalStatus = null;
+      let retries = 3;
+      
+      while (retries > 0) {
+        finalStatus = await apiClient.getGoogleDriveStatus();
+        if (finalStatus.authenticated) {
+          break;
+        }
+        
+        retries--;
+        if (retries > 0) {
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
       if (!finalStatus.authenticated) {
-        throw new Error('Authentication was not completed successfully');
+        throw new Error('Authentication was not completed successfully. Please try again.');
       }
 
-      // 5️⃣ Update state and proceed with Google Drive picker
+      // 6️⃣ Update state and proceed with Google Drive picker
       setGoogleDriveAvailable(true);
 
       // Initialize Google Drive API
@@ -670,22 +753,34 @@ function FacebookPage() {
       }
       
       // Get fresh token for picker
-      await apiClient.getGoogleDriveToken();
+      const tokenResponse = await apiClient.getGoogleDriveToken();
+      if (!tokenResponse.access_token) {
+        throw new Error('Failed to get Google Drive access token');
+      }
       
-      // Open Google Drive picker
+      // Open Google Drive picker with OAuth token
       const picker = new window.google.picker.PickerBuilder()
         .addView(new window.google.picker.DocsView()
-          .setIncludeFolders(true)
+          .setIncludeFolders(false)  // Don't include folders for file selection
           .setSelectFolderEnabled(false)
-          .setMimeTypes(filePickerType === 'photo' ? 'image/*' : 'video/*'))
-        // .setOAuthToken(authResult.access_token) // Removed to prevent Facebook SDK conflicts
+          .setMimeTypes(filePickerType === 'photo' ? 'image/*' : 'video/*')
+          .setMode(window.google.picker.DocsViewMode.LIST))  // Use list mode for better compatibility
+        .addView(new window.google.picker.DocsUploadView())  // Add upload view as fallback
+        .setOAuthToken(tokenResponse.access_token)
         .setDeveloperKey(process.env.REACT_APP_GOOGLE_DEVELOPER_KEY || '')
         .setCallback(handleGoogleDriveCallback)
         .enableFeature(window.google.picker.Feature.NAV_HIDDEN)
         .enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED, false)
-        .setTitle('Select a file from Google Drive')
+        .setTitle(`Select a ${filePickerType === 'photo' ? 'photo' : 'video'} from Google Drive`)
         .setSelectableMimeTypes(filePickerType === 'photo' ? 'image/*' : 'video/*')
+        .setOrigin(window.location.origin)  // Set the origin for better security
         .build();
+      
+      console.log('🔍 Google Picker configuration:', {
+        mimeTypes: filePickerType === 'photo' ? 'image/*' : 'video/*',
+        accessToken: tokenResponse.access_token ? 'Present' : 'Missing',
+        developerKey: process.env.REACT_APP_GOOGLE_DEVELOPER_KEY ? 'Present' : 'Missing'
+      });
       
       picker.setVisible(true);
       
@@ -723,8 +818,12 @@ function FacebookPage() {
 
 
   const handleGoogleDriveCallback = async (data) => {
+    console.log('Google Drive Picker Callback:', data);
+    
     if (data.action === window.google.picker.Action.PICKED) {
       const file = data.docs[0];
+      console.log('Selected file:', file);
+      
       try {
         // Download the file from Google Drive
         const fileContent = await downloadGoogleDriveFile(file.id);
@@ -751,6 +850,11 @@ function FacebookPage() {
         console.error('Error downloading file from Google Drive:', error);
         setConnectionStatus('Failed to download file from Google Drive: ' + error.message);
       }
+    } else if (data.action === window.google.picker.Action.CANCEL) {
+      console.log('Google Drive Picker cancelled');
+      closeFilePicker();
+    } else {
+      console.log('Google Drive Picker action:', data.action);
     }
   };
 
@@ -1314,77 +1418,93 @@ function FacebookPage() {
             <div className="facebook-connected-content">
               {/* Page Selection */}
               {availablePages.length > 1 && (
-                <div className="page-selector" style={{ marginTop: 25, marginBottom: 32, marginLeft: 48, display: 'flex', alignItems: 'center', gap: 24 }}>
-                  <div style={{ width: 56, height: 56, borderRadius: '50%', overflow: 'hidden', background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {selectedPage && selectedPage.profilePicture ? (
-                      <img src={selectedPage.profilePicture} alt={selectedPage.name} style={{ width: 56, height: 56, objectFit: 'cover' }} />
-                    ) : (
-                      <svg width="36" height="36" viewBox="0 0 24 24" fill="#cbd5e1">
-                        <circle cx="12" cy="12" r="10" />
-                        <circle cx="12" cy="10" r="4" fill="#fff" />
-                      </svg>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <label htmlFor="page-dropdown" style={{ fontWeight: 600, fontSize: 18, marginBottom: 2, fontFamily: 'Inter, Segoe UI, Arial, sans-serif' }}>Select a Page</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                      <select
-                        id="page-dropdown"
-                        className="page-dropdown"
-                        value={selectedPage?.id || ''}
-                        onChange={e => {
-                          const page = availablePages.find(p => p.id === e.target.value);
-                          if (page && selectedPage?.id !== page.id) {
-                            setSelectedPage(page);
-                            setAutoPostHistory([]);
-                            setManualPostHistory([]);
-                            setShowBulkComposer(false);
-                            setActiveTab('auto');
-                            setConnectionStatus('');
-                            setScheduleData({
-                              prompt: '',
-                              time: '',
-                              frequency: 'daily',
-                              customDate: '',
-                              isActive: false,
-                              scheduleId: null
-                            });
-                            setAutoReplyMessagesEnabled(true);
-                            setAutoReplyMessagesLoading(false);
-                            setAutoReplyMessagesError(null);
-                            setTimeout(() => {
-                              loadAutoReplySettings();
-                              loadPostHistory();
-                            }, 100);
-                          }
-                        }}
-                        style={{
-                          padding: '12px 16px',
-                          borderRadius: 7,
-                          border: '1.5px solid #b6bbc6',
-                          fontSize: 18,
-                          minWidth: 240,
-                          background: '#fff',
-                          fontWeight: 500,
-                          outline: 'none',
-                          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-                          fontFamily: 'Inter, Segoe UI, Arial, sans-serif'
-                        }}
-                      >
-                        <option value="" disabled>Select a page...</option>
-                        {availablePages.map(page => (
-                          <option key={page.id} value={page.id}>
-                            {page.name} ({page.category})
-                          </option>
-                        ))}
-                      </select>
-                      {selectedPage && (
-                        <span style={{ color: '#64748b', fontSize: 16, fontWeight: 500, fontFamily: 'Inter, Segoe UI, Arial, sans-serif', marginLeft: 2 }}>
-                          {selectedPage.followerCount || 0} followers
-                        </span>
+                <div className="page-selector-enhanced">
+                  <div className="page-selector-header">
+                    <div className="page-avatar">
+                      {selectedPage && selectedPage.profilePicture ? (
+                        <img 
+                          src={selectedPage.profilePicture} 
+                          alt={selectedPage.name} 
+                          className="page-avatar-image"
+                        />
+                      ) : (
+                        <div className="page-avatar-placeholder">
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                          </svg>
+                        </div>
                       )}
                     </div>
+                    <div className="page-selector-content">
+                      <h3 className="page-selector-title">Select a Page</h3>
+                      <p className="page-selector-subtitle">Choose which Facebook page to manage</p>
+                    </div>
                   </div>
+                  
+                  <div className="page-selector-dropdown-container">
+                    <select
+                      id="page-dropdown"
+                      className="page-dropdown-enhanced"
+                      value={selectedPage?.id || ''}
+                      onChange={e => {
+                        const page = availablePages.find(p => p.id === e.target.value);
+                        if (page && selectedPage?.id !== page.id) {
+                          setSelectedPage(page);
+                          setAutoPostHistory([]);
+                          setManualPostHistory([]);
+                          setShowBulkComposer(false);
+                          setActiveTab('auto');
+                          setConnectionStatus('');
+                          setScheduleData({
+                            prompt: '',
+                            time: '',
+                            frequency: 'daily',
+                            customDate: '',
+                            isActive: false,
+                            scheduleId: null
+                          });
+                          setAutoReplyMessagesEnabled(true);
+                          setAutoReplyMessagesLoading(false);
+                          setAutoReplyMessagesError(null);
+                          setTimeout(() => {
+                            loadAutoReplySettings();
+                            loadPostHistory();
+                          }, 100);
+                        }
+                      }}
+                    >
+                      <option value="" disabled>Choose a page...</option>
+                      {availablePages.map(page => (
+                        <option key={page.id} value={page.id}>
+                          {page.name} ({page.category})
+                        </option>
+                      ))}
+                    </select>
+                    
+                    <div className="page-selector-icon">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="6,9 12,15 18,9"/>
+                      </svg>
+                    </div>
+                  </div>
+                  
+                  {selectedPage && (
+                    <div className="page-selector-info">
+                      <div className="page-info-item">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                          <circle cx="9" cy="7" r="4"/>
+                          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                        <span>{selectedPage.followerCount?.toLocaleString() || 0} followers</span>
+                      </div>
+                      <div className="page-info-item">
+                        <div className="status-dot connected"></div>
+                        <span>Connected & Ready</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1908,6 +2028,8 @@ function FacebookPage() {
                     {activeTab === 'bulk' && showBulkComposer && (
                       <BulkComposer 
                         selectedPage={selectedPage}
+                        availablePages={availablePages}
+                        onPageChange={setSelectedPage}
                         onClose={() => {
                           setShowBulkComposer(false);
                           setActiveTab('auto');
@@ -2002,19 +2124,51 @@ function FacebookPage() {
                       </div>
                     )}
                     {googleDriveAvailable && (
-                      <button 
-                        className="disconnect-drive-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          disconnectGoogleDrive();
-                        }}
-                        title="Disconnect Google Drive"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <line x1="18" y1="6" x2="6" y2="18"/>
-                          <line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                      </button>
+                      <div className="drive-actions">
+                        <button 
+                          className="debug-drive-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            debugGoogleDrive();
+                          }}
+                          title="Debug Google Drive"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="8" x2="12" y2="12"/>
+                            <circle cx="12" cy="16" r="1"/>
+                          </svg>
+                          Debug
+                        </button>
+                        <button 
+                          className="test-images-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            testGoogleDriveImages();
+                          }}
+                          title="Test Images/Videos"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <polyline points="21,15 16,10 5,21"/>
+                          </svg>
+                          Test Images
+                        </button>
+                        <button 
+                          className="disconnect-drive-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            disconnectGoogleDrive();
+                          }}
+                          title="Disconnect Google Drive"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                          </svg>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>

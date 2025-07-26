@@ -27,8 +27,10 @@ class User(Base):
     posts = relationship("Post", back_populates="user")
     automation_rules = relationship("AutomationRule", back_populates="user")
     scheduled_posts = relationship("ScheduledPost", back_populates="user")
-
     bulk_composer_content = relationship("BulkComposerContent", back_populates="user")
+    strategy_plans = relationship("StrategyPlan", back_populates="user")
+    single_instagram_posts = relationship("SingleInstagramPost", back_populates="user")
+    global_auto_reply_status = relationship("GlobalAutoReplyStatus", back_populates="user")
     
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', username='{self.username}')>" 

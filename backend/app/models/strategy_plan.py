@@ -13,5 +13,6 @@ class StrategyPlan(Base):
     time_slot = Column(String) # e.g., "21:00"
     duration = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
-    # Relationship to scheduled posts
+    # Relationships
+    user = relationship("User", back_populates="strategy_plans")
     scheduled_posts = relationship("ScheduledPost", back_populates="strategy_plan")

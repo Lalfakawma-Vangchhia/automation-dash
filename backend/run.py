@@ -34,7 +34,7 @@ def main():
     try:
         uvicorn.run(
             "app.main:app",
-            host="0.0.0.0",
+            host="localhost",
             port=8000,
             reload=settings.debug,
             log_level="info" if settings.debug else "warning",

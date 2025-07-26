@@ -16,6 +16,7 @@ const promptTemplates = [
 ];
 
 // Utility function to convert UTC time to IST time for display
+// eslint-disable-next-line no-unused-vars
 const utcToIstTime = (utcTime) => {
   const [hours, minutes] = utcTime.split(':');
   const date = new Date();
@@ -31,6 +32,7 @@ const utcToIstTime = (utcTime) => {
 };
 
 // Utility function to convert IST time to UTC for backend
+// eslint-disable-next-line no-unused-vars
 const istToUtcTime = (istTime) => {
   const [hours, minutes] = istTime.split(':');
   let utcHours = (parseInt(hours) - 5 + 24) % 24;
@@ -46,6 +48,7 @@ const istToUtcTime = (istTime) => {
 
 // dateStr: "2025-07-17"
 // timeStr: "11:17"
+// eslint-disable-next-line no-unused-vars
 function toISTISOString(dateStr, timeStr) {
   // Create a Date object in the user's local time
   const [year, month, day] = dateStr.split('-').map(Number);
@@ -67,9 +70,9 @@ function toISTISOString(dateStr, timeStr) {
   return iso;
 }
 
-function BulkComposer({ selectedPage, onClose }) {
+function BulkComposer({ selectedPage, onClose, availablePages, onPageChange }) {
 
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   
   // Strategy step state
   const [strategyData, setStrategyData] = useState({
@@ -104,6 +107,12 @@ function BulkComposer({ selectedPage, onClose }) {
   const [showScheduledPosts, setShowScheduledPosts] = useState(true);
   const [expandedSchedule, setExpandedSchedule] = useState(null);
   const [editingPost, setEditingPost] = useState(null);
+
+  // Add page sync state
+  // eslint-disable-next-line no-unused-vars
+  const [isCheckingPageSync, setIsCheckingPageSync] = useState(false);
+  // eslint-disable-next-line no-unused-vars
+  const [pageSyncStatus, setPageSyncStatus] = useState('');
 
   // 1. Add state for pagination and sorting:
   const [schedulePage, setSchedulePage] = useState(1);
@@ -247,6 +256,7 @@ function BulkComposer({ selectedPage, onClose }) {
       const istTime = utcToIstTime(strategyData.timeSlot);
       setStrategyData(prev => ({...prev, timeSlot: istTime}));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load scheduled posts
@@ -478,7 +488,7 @@ function BulkComposer({ selectedPage, onClose }) {
           maxLength: 2000
         });
         
-        response = await apiClient.generateBulkCaptions(
+        response = await apiClient.generateFacebookBulkCaptions(
           strategyData.customStrategyTemplate,
           contexts,
           2000
@@ -500,7 +510,7 @@ function BulkComposer({ selectedPage, onClose }) {
           try {
             console.log(`Generating caption ${i + 1}/${contexts.length} for context:`, contexts[i]);
             const context = contexts[i];
-            const captionResponse = await apiClient.generateCaptionWithStrategy(
+            const captionResponse = await apiClient.generateFacebookCaptionWithStrategy(
               selectedTemplate.prompt,
               context,
               2000
@@ -704,70 +714,37 @@ function BulkComposer({ selectedPage, onClose }) {
       }
       
       if (!selectedPage.internalId) {
-        alert(`The selected page "${selectedPage.name}" is not properly synced with the database. Please try the following:\n\n1. Disconnect and reconnect Facebook\n2. Wait a few seconds after reconnecting\n3. Select the page again\n\nIf this still doesn't work, check the browser console for more details.`);
-        
-        // Try to sync the page automatically
-        console.log('Attempting to sync page with database...');
-        console.log('Current user from auth context:', user);
-        console.log('Looking for platform_user_id:', selectedPage.id);
-        
-        try {
-          const socialAccounts = await apiClient.getSocialAccounts();
-          console.log('Available social accounts (all):', socialAccounts);
-          
-          const facebookAccounts = socialAccounts.filter(acc => 
-            acc.platform === 'facebook' && acc.is_connected
+        // Try to automatically sync the page first
+        const shouldRetry = await new Promise((resolve) => {
+          const confirmed = window.confirm(
+            `The selected page "${selectedPage.name}" is not properly synced with the database.\n\n` +
+            `Would you like to try syncing it automatically?\n\n` +
+            `Click "OK" to try syncing, or "Cancel" to abort scheduling.`
           );
-          console.log('Facebook accounts (filtered by platform and connected):', facebookAccounts);
-          console.log('Facebook account platform_user_ids:', facebookAccounts.map(acc => ({
-            id: acc.id,
-            user_id: acc.user_id,
-            platform_user_id: acc.platform_user_id,
-            username: acc.username,
-            display_name: acc.display_name
-          })));
-          
-          const matchingAccount = facebookAccounts.find(acc => 
-            acc.platform_user_id === selectedPage.id
-          );
-          console.log('Matching account for selected page:', matchingAccount);
-          
-          if (matchingAccount) {
-            console.log('Found matching account! Details:', {
-              internal_id: matchingAccount.id,
-              user_id: matchingAccount.user_id,
-              platform_user_id: matchingAccount.platform_user_id,
-              display_name: matchingAccount.display_name,
-              current_user_id: user?.id
-            });
+          resolve(confirmed);
+        });
+        
+        if (shouldRetry) {
+          const syncSuccess = await checkPageSync();
+          if (!syncSuccess) {
+            const manualRetry = window.confirm(
+              `Automatic sync failed. This usually happens when:\n\n` +
+              `1. The page was recently connected\n` +
+              `2. Facebook permissions need to be refreshed\n\n` +
+              `Would you like to:\n` +
+              `• Click "OK" to disconnect and reconnect Facebook\n` +
+              `• Click "Cancel" to try manual sync later`
+            );
             
-            // Check if this account belongs to the current user
-            if (user && matchingAccount.user_id !== user.id) {
-              console.error('USER ID MISMATCH! Account belongs to user', matchingAccount.user_id, 'but current user is', user.id);
-              alert(`Account mismatch detected. The page "${selectedPage.name}" belongs to a different user account. Please log out and log in with the correct account, or disconnect and reconnect Facebook.`);
-            } else {
-              console.log('User ID matches! Account should work.');
-              // We can't directly update selectedPage here since it's passed as a prop
-              // The user needs to trigger a refresh in the parent component
-              alert(`Found database record for "${selectedPage.name}"! Internal ID: ${matchingAccount.id}. Please try selecting the page again or refresh the page.`);
+            if (manualRetry) {
+              alert('Please use the "Disconnect Facebook" button in the main interface, then reconnect Facebook and try again.');
             }
-          } else {
-            console.log('No matching account found. Available platform_user_ids:', 
-              facebookAccounts.map(acc => acc.platform_user_id));
-            console.log('Searching for platform_user_id:', selectedPage.id);
-            console.log('Available accounts detail:', facebookAccounts.map(acc => ({
-              id: acc.id,
-              platform_user_id: acc.platform_user_id,
-              display_name: acc.display_name,
-              user_id: acc.user_id
-            })));
-            alert(`No database record found for page "${selectedPage.name}" (ID: ${selectedPage.id}). Please disconnect and reconnect Facebook.`);
+            return;
           }
-        } catch (error) {
-          console.error('Error checking social accounts:', error);
-          alert('Failed to check page sync status. Please disconnect and reconnect Facebook.');
+          // If sync was successful, continue with scheduling
+        } else {
+          return;
         }
-        return;
       }
       
       if (composerRows.length === 0) {
@@ -962,7 +939,21 @@ function BulkComposer({ selectedPage, onClose }) {
         stack: error.stack,
         name: error.name
       });
-      alert(`Error scheduling posts: ${error.message || 'Please try again.'}`);
+      
+      // Provide better error messages based on error type
+      if (error.message?.includes('social_account_id') || error.message?.includes('not found')) {
+        const retrySync = window.confirm(
+          `Page synchronization error detected.\n\n` +
+          `Error: ${error.message}\n\n` +
+          `Would you like to try syncing the page again?`
+        );
+        
+        if (retrySync) {
+          await checkPageSync();
+        }
+      } else {
+        alert(`Error scheduling posts: ${error.message || 'Please try again.'}`);
+      }
     } finally {
       setIsScheduling(false);
       setScheduleProgress(0);
@@ -1141,6 +1132,77 @@ function BulkComposer({ selectedPage, onClose }) {
     }
   };
 
+  // Add page synchronization checking function
+  const checkPageSync = useCallback(async () => {
+    if (!selectedPage) return false;
+    
+    setIsCheckingPageSync(true);
+    setPageSyncStatus('Checking page synchronization...');
+    
+    try {
+      const socialAccounts = await apiClient.getSocialAccounts();
+      const facebookAccounts = socialAccounts.filter(acc => 
+        acc.platform === 'facebook' && acc.is_connected
+      );
+      
+      const matchingAccount = facebookAccounts.find(acc => 
+        acc.platform_user_id === selectedPage.id
+      );
+      
+      if (matchingAccount) {
+        // Update the selected page with internal ID
+        if (onPageChange) {
+          const updatedPage = {
+            ...selectedPage,
+            internalId: matchingAccount.id
+          };
+          onPageChange(updatedPage);
+        }
+        setPageSyncStatus('✓ Page is synchronized');
+        return true;
+      } else {
+        setPageSyncStatus('⚠ Page is not synchronized with database');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error checking page sync:', error);
+      setPageSyncStatus('✗ Failed to check page synchronization');
+      return false;
+    } finally {
+      setIsCheckingPageSync(false);
+    }
+  }, [selectedPage, onPageChange]);
+
+  // Handle page selection change
+  // eslint-disable-next-line no-unused-vars
+  const handlePageSelect = (pageId) => {
+    if (onPageChange && availablePages) {
+      const newPage = availablePages.find(p => p.id === pageId);
+      if (newPage) {
+        onPageChange(newPage);
+        // Reset composer state when page changes
+        setComposerRows([]);
+        setSelectedRows([]);
+        setScheduledPosts([]);
+        setPageSyncStatus('');
+      }
+    }
+  };
+
+  // Auto-check page sync when selectedPage changes (moved here after checkPageSync definition)
+  useEffect(() => {
+    if (selectedPage && !selectedPage.internalId) {
+      // Delay the sync check to allow for any ongoing backend sync
+      const timer = setTimeout(() => {
+        checkPageSync();
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    } else if (selectedPage && selectedPage.internalId) {
+      setPageSyncStatus('✓ Page is synchronized');
+    }
+  }, [selectedPage, checkPageSync]);
+
   return (
     <div className="bulk-composer-panel">
       <div className="bulk-composer-header">
@@ -1148,6 +1210,7 @@ function BulkComposer({ selectedPage, onClose }) {
           <h2>Bulk Composer</h2>
           <p className="header-subtitle">Create and schedule multiple social media posts efficiently</p>
         </div>
+
         {!isAuthenticated && (
           <div className="auth-warning">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

@@ -59,6 +59,8 @@ class ApiClient {
         '/social/instagram/generate-image',     // AI image generation
         '/social/instagram/generate-caption',   // AI caption generation
         '/social/facebook/generate-image',      // Facebook AI image generation
+        '/social/facebook/generate-caption-with-strategy',  // Facebook AI caption generation
+        '/social/facebook/generate-bulk-captions',          // Facebook AI bulk caption generation
         '/ai/generate-content',                 // General AI content generation
         '/social/instagram/create-post',        // Instagram post creation
         '/social/facebook/create-post',         // Facebook post creation
@@ -434,6 +436,14 @@ class ApiClient {
     return response;
   }
 
+  async debugGoogleDrive() {
+    return this.request('/google-drive/debug');
+  }
+
+  async testGoogleDriveImages() {
+    return this.request('/google-drive/test-images');
+  }
+
   async disconnectGoogleDrive() {
     return this.request('/google-drive/disconnect', {
       method: 'POST',
@@ -613,6 +623,30 @@ class ApiClient {
       body: JSON.stringify({
         custom_strategy: customStrategy,
         context: context,
+        max_length: maxLength
+      }),
+    });
+    return response;
+  }
+
+  async generateFacebookCaptionWithStrategy(customStrategy, context = "", maxLength = 2000) {
+    const response = await this.request('/social/facebook/generate-caption-with-strategy', {
+      method: 'POST',
+      body: JSON.stringify({
+        custom_strategy: customStrategy,
+        context: context,
+        max_length: maxLength
+      }),
+    });
+    return response;
+  }
+
+  async generateFacebookBulkCaptions(customStrategy, contexts, maxLength = 2000) {
+    const response = await this.request('/social/facebook/generate-bulk-captions', {
+      method: 'POST',
+      body: JSON.stringify({
+        custom_strategy: customStrategy,
+        contexts: contexts,
         max_length: maxLength
       }),
     });

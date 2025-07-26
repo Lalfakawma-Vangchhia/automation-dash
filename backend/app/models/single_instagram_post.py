@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ARRAY, ForeignKey
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from app.database import Base
 
 class SingleInstagramPost(Base):
@@ -19,3 +20,7 @@ class SingleInstagramPost(Base):
     published_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", back_populates="single_instagram_posts")
+    social_account = relationship("SocialAccount", back_populates="single_instagram_posts")

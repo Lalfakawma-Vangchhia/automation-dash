@@ -144,6 +144,13 @@ class BulkCaptionGenerationRequest(BaseModel):
     max_length: int = Field(default=2000, ge=100, le=5000, description="Maximum character length for the captions")
 
 
+class FacebookCustomStrategyCaptionRequest(BaseModel):
+    """Request model for generating Facebook captions using custom strategy templates."""
+    custom_strategy: str = Field(..., min_length=1, max_length=2000, description="Custom strategy template")
+    context: Optional[str] = Field("", description="Additional context or topic for the caption")
+    max_length: int = Field(default=2000, ge=100, le=5000, description="Maximum character length for the caption")
+
+
 class InstagramImageGenerationRequest(BaseModel):
     """Request model for Instagram image generation."""
     image_prompt: str = Field(..., min_length=1, max_length=500, description="Prompt for image generation")
@@ -172,10 +179,10 @@ async def get_social_accounts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all connected Instagram accounts for the current user."""
+    """Get all connected social accounts for the current user."""
     accounts = db.query(SocialAccount).filter(
         SocialAccount.user_id == current_user.id,
-        SocialAccount.platform == "instagram"
+        SocialAccount.is_connected == True
     ).all()
     result = []
     for acc in accounts:
@@ -1343,6 +1350,91 @@ async def create_unified_facebook_post(
         raise HTTPException(
             status_code=500,
             detail=f"Unexpected error: {str(e)}"
+        )
+
+
+@router.post("/social/facebook/generate-caption-with-strategy")
+async def generate_facebook_caption_with_custom_strategy(
+    request: FacebookCustomStrategyCaptionRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Generate Facebook caption using a custom strategy template."""
+    try:
+        from app.services.groq_service import groq_service
+        
+        result = await groq_service.generate_facebook_caption_with_custom_strategy(
+            custom_strategy=request.custom_strategy,
+            context=request.context,
+            max_length=request.max_length
+        )
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Facebook caption generation failed: {result.get('error', 'Unknown error')}"
+            )
+        
+        return {
+            "success": True,
+            "content": result["content"],
+            "custom_strategy": request.custom_strategy,
+            "context": request.context
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating Facebook caption with custom strategy: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate Facebook caption: {str(e)}"
+        )
+
+
+@router.post("/social/facebook/generate-bulk-captions")
+async def generate_facebook_bulk_captions(
+    request: BulkCaptionGenerationRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Generate captions for multiple Facebook posts using a custom strategy template."""
+    try:
+        from app.services.groq_service import groq_service
+        
+        captions = []
+        
+        for context in request.contexts:
+            result = await groq_service.generate_facebook_caption_with_custom_strategy(
+                custom_strategy=request.custom_strategy,
+                context=context,
+                max_length=request.max_length
+            )
+            
+            if result["success"]:
+                captions.append({
+                    "content": result["content"],
+                    "context": context,
+                    "success": True
+                })
+            else:
+                captions.append({
+                    "content": f"Failed to generate caption for: {context}",
+                    "context": context,
+                    "success": False,
+                    "error": result.get("error", "Unknown error")
+                })
+        
+        return {
+            "success": True,
+            "captions": captions,
+            "custom_strategy": request.custom_strategy,
+            "total_generated": len([c for c in captions if c["success"]])
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating Facebook bulk captions: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate Facebook bulk captions: {str(e)}"
         )
 
 
@@ -3082,6 +3174,43 @@ async def debug_instagram_accounts(
             "last_sync_at": acc.last_sync_at,
             "connected_at": acc.connected_at
         } for acc in instagram_accounts]
+    }
+
+
+@router.get("/social/debug/all-accounts")
+async def debug_all_accounts(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to see all social accounts for current user."""
+    all_accounts = db.query(SocialAccount).filter(
+        SocialAccount.user_id == current_user.id
+    ).all()
+    
+    facebook_accounts = [acc for acc in all_accounts if acc.platform == "facebook"]
+    instagram_accounts = [acc for acc in all_accounts if acc.platform == "instagram"]
+    
+    return {
+        "user_id": current_user.id,
+        "total_accounts": len(all_accounts),
+        "facebook_accounts": len(facebook_accounts),
+        "instagram_accounts": len(instagram_accounts),
+        "accounts": [{
+            "id": acc.id,
+            "platform": acc.platform,
+            "platform_user_id": acc.platform_user_id,
+            "username": acc.username,
+            "display_name": acc.display_name,
+            "account_type": acc.account_type,
+            "is_connected": acc.is_connected,
+            "is_active": acc.is_active,
+            "follower_count": acc.follower_count,
+            "profile_picture_url": acc.profile_picture_url,
+            "platform_data": acc.platform_data,
+            "last_sync_at": acc.last_sync_at,
+            "connected_at": acc.connected_at,
+            "token_expires_at": acc.token_expires_at
+        } for acc in all_accounts]
     }
 
 

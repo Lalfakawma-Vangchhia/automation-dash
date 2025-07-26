@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from app.config import get_settings
 from app.database import init_db, verify_db_connection
-from app.api import auth, social_media, ai, google_drive, webhook
+from app.api import auth, social_media, ai, google_drive, webhook, google_oauth
 import logging
 import asyncio
 import os
@@ -162,6 +162,7 @@ app.include_router(social_media.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(google_drive.router)
 app.include_router(webhook.router, prefix="/api")
+app.include_router(google_oauth.router, prefix="/api")
 
 
 # Error handlers
