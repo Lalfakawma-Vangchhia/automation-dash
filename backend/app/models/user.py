@@ -17,6 +17,11 @@ class User(Base):
     avatar_url = Column(String, nullable=True)
     timezone = Column(String, default="UTC")
     
+    # OTP fields
+    otp_code = Column(String, nullable=True)
+    otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+    is_email_verified = Column(Boolean, default=False)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

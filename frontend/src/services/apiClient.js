@@ -3,15 +3,15 @@ class ApiClient {
   constructor() {
     // For development, you can force HTTP by uncommenting the next line:
     // const defaultURL = 'http://localhost:8000/api';
-    
+
     // Determine if we should use HTTPS based on the current protocol
     const isHttps = window.location.protocol === 'https:';
     const protocol = isHttps ? 'https:' : 'http:';
     const defaultURL = `${protocol}//localhost:8000/api`;
-    
+
     this.baseURL = process.env.REACT_APP_API_URL || defaultURL;
     this.token = localStorage.getItem('authToken');
-    
+
     console.log('🔍 DEBUG: API Client initialized with baseURL:', this.baseURL);
   }
 
@@ -38,7 +38,7 @@ class ApiClient {
 
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
-    
+
     const config = {
       headers: this.getHeaders(),
       ...options,
@@ -46,7 +46,7 @@ class ApiClient {
 
     try {
       console.log(`Making API request to: ${url}`);
-      
+
       // Dynamic timeout – longer for AI image endpoints which can take ~30-60 s
       let timeoutMs = 300000; // default  s
       const longRunningEndpoints = [
@@ -77,12 +77,12 @@ class ApiClient {
         '/carousel',                                // Carousel operations
         '/upload'                                   // Upload operations
       ];
-      
+
       // Check for specific high-load operations
       const isAIGeneration = endpoint.includes('generate') || endpoint.includes('ai/');
       const isCarouselOperation = endpoint.includes('carousel');
       const isUploadOperation = endpoint.includes('upload');
-      
+
       if (longRunningEndpoints.some(ep => endpoint.includes(ep))) {
         if (isAIGeneration || isCarouselOperation) {
           timeoutMs = 300000; // 5 minutes for AI generation and carousel operations
@@ -93,7 +93,7 @@ class ApiClient {
         }
       }
 
-      console.log(`⏱ Using timeout ${timeoutMs/1000}s for this request`);
+      console.log(`⏱ Using timeout ${timeoutMs / 1000}s for this request`);
       console.log(`🔍 Endpoint: ${endpoint}`);
       console.log(`🔍 Is AI Generation: ${isAIGeneration}`);
       console.log(`🔍 Is Carousel Operation: ${isCarouselOperation}`);
@@ -101,17 +101,17 @@ class ApiClient {
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
-        console.error(`⏰ Timeout after ${timeoutMs/1000}s for endpoint: ${endpoint}`);
+        console.error(`⏰ Timeout after ${timeoutMs / 1000}s for endpoint: ${endpoint}`);
         controller.abort();
       }, timeoutMs);
-      
+
       const response = await fetch(url, {
         ...config,
         signal: controller.signal
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       if (!response.ok) {
         let errorData = {};
         try {
@@ -119,19 +119,19 @@ class ApiClient {
         } catch (e) {
           console.warn('Failed to parse error response as JSON');
         }
-        
+
         // Handle 401 Unauthorized specifically
         if (response.status === 401) {
           console.warn('Authentication failed - token may be expired');
           this.setToken(null); // Clear invalid token
           throw new Error('Could not validate credentials - please log in again');
         }
-        
+
         // Handle validation errors (422)
         if (response.status === 422 && errorData.detail) {
           // Handle Pydantic validation errors
           if (Array.isArray(errorData.detail)) {
-            const validationErrors = errorData.detail.map(err => 
+            const validationErrors = errorData.detail.map(err =>
               `${err.loc.join('.')}: ${err.msg}`
             ).join(', ');
             throw new Error(`Validation Error: ${validationErrors}`);
@@ -139,7 +139,7 @@ class ApiClient {
             throw new Error(errorData.detail);
           }
         }
-        
+
         // Extract error message properly
         let errorMessage = 'Unknown error occurred';
         if (typeof errorData === 'string') {
@@ -153,7 +153,7 @@ class ApiClient {
         } else {
           errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         }
-        
+
         throw new Error(errorMessage);
       }
 
@@ -200,11 +200,11 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    
+
     if (response.access_token) {
       this.setToken(response.access_token);
     }
-    
+
     return response;
   }
 
@@ -214,6 +214,28 @@ class ApiClient {
 
   async logout() {
     this.setToken(null);
+  }
+
+  // OTP endpoints
+  async sendOTP(email) {
+    return this.request('/auth/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  async verifyOTP(email, otp) {
+    return this.request('/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    });
+  }
+
+  async resendOTP(email) {
+    return this.request('/auth/resend-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
   }
 
   // Google OAuth endpoints
@@ -229,11 +251,11 @@ class ApiClient {
         redirect_uri: redirectUri
       }),
     });
-    
+
     if (response.access_token) {
       this.setToken(response.access_token);
     }
-    
+
     return response;
   }
 
@@ -278,7 +300,7 @@ class ApiClient {
     if (platform) params.append('platform', platform);
     params.append('limit', limit.toString());
     if (socialAccountId) params.append('social_account_id', socialAccountId);
-    
+
     return this.request(`/api/social/posts?${params.toString()}`);
   }
 
@@ -326,7 +348,7 @@ class ApiClient {
   async uploadImageToCloudinary(file) {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     // Use custom FormData upload method
     const url = `${this.baseURL}/social/instagram/upload-image`;
     const config = {
@@ -350,10 +372,10 @@ class ApiClient {
       console.log(`🔍 DEBUG: Uploading image to Cloudinary via ${url}`);
       console.log(`🔍 DEBUG: Request config:`, config);
       const response = await fetch(url, config);
-      
+
       console.log(`🔍 DEBUG: Response status:`, response.status);
       console.log(`🔍 DEBUG: Response headers:`, Object.fromEntries(response.headers.entries()));
-      
+
       if (!response.ok) {
         let errorData = {};
         try {
@@ -362,7 +384,7 @@ class ApiClient {
         } catch (e) {
           console.warn('Failed to parse error response as JSON');
         }
-        
+
         let errorMessage = 'Unknown error occurred';
         if (typeof errorData === 'string') {
           errorMessage = errorData;
@@ -375,7 +397,7 @@ class ApiClient {
         } else {
           errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         }
-        
+
         throw new Error(errorMessage);
       }
 
@@ -392,7 +414,7 @@ class ApiClient {
   async uploadVideoToCloudinary(file) {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     // Use custom FormData upload method
     const url = `${this.baseURL}/social/instagram/upload-video`;
     const config = {
@@ -410,7 +432,7 @@ class ApiClient {
     try {
       console.log(`🔍 DEBUG: Uploading video to Cloudinary via ${url}`);
       const response = await fetch(url, config);
-      
+
       if (!response.ok) {
         let errorData = {};
         try {
@@ -418,7 +440,7 @@ class ApiClient {
         } catch (e) {
           console.warn('Failed to parse error response as JSON');
         }
-        
+
         let errorMessage = 'Unknown error occurred';
         if (typeof errorData === 'string') {
           errorMessage = errorData;
@@ -431,63 +453,7 @@ class ApiClient {
         } else {
           errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         }
-        
-        throw new Error(errorMessage);
-      }
 
-      const responseData = await response.json();
-      console.log(`FormData upload response:`, responseData);
-      return responseData;
-    } catch (error) {
-      console.error(`FormData upload error:`, error);
-      throw error;
-    }
-  }
-
-  // Upload thumbnail to Cloudinary for Instagram reels
-  async uploadThumbnailToCloudinary(file) {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    // Use custom FormData upload method
-    const url = `${this.baseURL}/social/instagram/upload-thumbnail`;
-    const config = {
-      method: 'POST',
-      body: formData,
-    };
-
-    // Add authorization header manually for FormData
-    if (this.token) {
-      config.headers = {
-        'Authorization': `Bearer ${this.token}`
-      };
-    }
-
-    try {
-      console.log(`🔍 DEBUG: Uploading thumbnail to Cloudinary via ${url}`);
-      const response = await fetch(url, config);
-      
-      if (!response.ok) {
-        let errorData = {};
-        try {
-          errorData = await response.json();
-        } catch (e) {
-          console.warn('Failed to parse error response as JSON');
-        }
-        
-        let errorMessage = 'Unknown error occurred';
-        if (typeof errorData === 'string') {
-          errorMessage = errorData;
-        } else if (errorData.error) {
-          errorMessage = errorData.error;
-        } else if (errorData.detail) {
-          errorMessage = errorData.detail;
-        } else if (errorData.message) {
-          errorMessage = errorData.message;
-        } else {
-          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        }
-        
         throw new Error(errorMessage);
       }
 
@@ -575,14 +541,14 @@ class ApiClient {
       location: options.location,
       hashtags: options.hashtags
     };
-    
+
     // Remove undefined and null values
     const cleanPayload = Object.fromEntries(
-      Object.entries(payload).filter(([key, value]) => 
+      Object.entries(payload).filter(([key, value]) =>
         value !== null && value !== undefined && value !== ''
       )
     );
-    
+
     return this.request('/social/instagram/create-post', {
       method: 'POST',
       body: JSON.stringify(cleanPayload),
@@ -642,6 +608,9 @@ class ApiClient {
     // This assumes your backend endpoint is /api/social/accounts and returns only Instagram accounts
     try {
       console.log('🔍 DEBUG: Fetching Instagram accounts from /social/accounts');
+      console.log('🔍 DEBUG: Current token:', this.token ? 'Token exists' : 'No token');
+      console.log('🔍 DEBUG: Base URL:', this.baseURL);
+
       const response = await this.request('/social/accounts', {
         method: 'GET',
       });
@@ -649,10 +618,20 @@ class ApiClient {
       return response;
     } catch (error) {
       console.error('🔍 DEBUG: Failed to fetch Instagram accounts:', error);
+      console.error('🔍 DEBUG: Error type:', error.constructor.name);
+      console.error('🔍 DEBUG: Error message:', error.message);
+
       if (error.message.includes('Failed to fetch')) {
-        console.error('🔍 DEBUG: This is likely a CORS or SSL certificate issue.');
+        console.error('🔍 DEBUG: This is likely a network, CORS, or SSL certificate issue.');
         console.error('🔍 DEBUG: Please visit https://localhost:8000/health and https://localhost:8000/api/social/accounts in your browser to accept the SSL certificate.');
+        console.error('🔍 DEBUG: Also check if backend is running with HTTPS.');
       }
+
+      if (error.message.includes('Could not validate credentials')) {
+        console.error('🔍 DEBUG: Authentication failed - token may be expired or invalid.');
+        console.error('🔍 DEBUG: Please try logging out and logging back in.');
+      }
+
       throw error;
     }
   }
@@ -663,7 +642,7 @@ class ApiClient {
     if (platform) params.append('platform', platform);
     if (status) params.append('status', status);
     if (limit) params.append('limit', limit.toString());
-    
+
     const query = params.toString();
     return this.request(`/api/social/posts${query ? `?${query}` : ''}`);
   }
@@ -673,7 +652,7 @@ class ApiClient {
     const params = new URLSearchParams();
     if (platform) params.append('platform', platform);
     if (ruleType) params.append('rule_type', ruleType);
-    
+
     const query = params.toString();
     return this.request(`/social/automation-rules${query ? `?${query}` : ''}`);
   }
@@ -696,24 +675,24 @@ class ApiClient {
           prompt: prompt
         }),
       });
-      
+
       if (!response || !response.content) {
         console.error('Invalid response format from caption generation:', response);
-        return { 
-          success: false, 
-          error: 'Invalid response format from server' 
+        return {
+          success: false,
+          error: 'Invalid response format from server'
         };
       }
-      
-      return { 
-        success: true, 
+
+      return {
+        success: true,
         content: response.content,
-        ...response 
+        ...response
       };
     } catch (error) {
       console.error('Error generating Instagram caption:', error);
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: error.message || 'Failed to generate caption',
         details: error.response?.data || error.toString()
       };

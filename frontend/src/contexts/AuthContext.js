@@ -57,10 +57,39 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     try {
       const response = await apiClient.register(userData);
-      // After registration, you might want to auto-login
       return response;
     } catch (error) {
       console.error('Registration failed:', error);
+      throw error;
+    }
+  };
+
+  const sendOTP = async (email) => {
+    try {
+      const response = await apiClient.sendOTP(email);
+      return response;
+    } catch (error) {
+      console.error('Send OTP failed:', error);
+      throw error;
+    }
+  };
+
+  const verifyOTP = async (email, otp) => {
+    try {
+      const response = await apiClient.verifyOTP(email, otp);
+      return response;
+    } catch (error) {
+      console.error('OTP verification failed:', error);
+      throw error;
+    }
+  };
+
+  const resendOTP = async (email) => {
+    try {
+      const response = await apiClient.resendOTP(email);
+      return response;
+    } catch (error) {
+      console.error('Resend OTP failed:', error);
       throw error;
     }
   };
@@ -219,6 +248,9 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     loginWithGoogle,
+    sendOTP,
+    verifyOTP,
+    resendOTP,
   };
 
   return (

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -12,6 +12,7 @@ import os
 import signal
 import sys
 from pathlib import Path
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -35,14 +36,34 @@ temp_images_path.mkdir(exist_ok=True)
 # Mount the static files
 app.mount("/temp_images", StaticFiles(directory="temp_images"), name="temp_images")
 
-# Add CORS middleware
+# Add request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    
+    # Log request details
+    logger.info(f"🔍 REQUEST: {request.method} {request.url}")
+    logger.info(f"🔍 Headers: {dict(request.headers)}")
+    logger.info(f"🔍 Origin: {request.headers.get('origin', 'No origin header')}")
+    
+    response = await call_next(request)
+    
+    # Log response details
+    process_time = time.time() - start_time
+    logger.info(f"🔍 RESPONSE: {response.status_code} - {process_time:.4f}s")
+    logger.info(f"🔍 Response Headers: {dict(response.headers)}")
+    
+    return response
+
+# Add CORS middleware with explicit configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=["*"],  # Allow all origins in development
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 # Add trusted host middleware for production
@@ -154,6 +175,35 @@ async def health_check():
         "debug": settings.debug,
         "database": "connected"
     }
+
+
+@app.get("/api/debug/cors")
+async def cors_debug():
+    """Debug endpoint to test CORS without authentication."""
+    return {
+        "message": "CORS is working",
+        "timestamp": "2025-07-28T05:40:00Z",
+        "cors_origins": settings.cors_origins
+    }
+
+
+@app.options("/api/{path:path}")
+async def options_handler(path: str):
+    """Handle preflight OPTIONS requests explicitly."""
+    return JSONResponse(
+        status_code=200,
+        content={"message": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Max-Age": "3600",
+        }
+    )
+
+
+
 
 
 # Include API routers
