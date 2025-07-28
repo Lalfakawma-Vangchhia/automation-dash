@@ -57,6 +57,10 @@ class Post(Base):
     is_auto_post = Column(Boolean, default=False)
     auto_post_config = Column(JSON, nullable=True)  # Configuration for auto-posting
     
+    # Reel thumbnail (for reels only)
+    reel_thumbnail_url = Column(String, nullable=True)
+    reel_thumbnail_filename = Column(String, nullable=True)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

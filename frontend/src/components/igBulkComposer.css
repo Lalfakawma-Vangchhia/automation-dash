@@ -41,7 +41,7 @@
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
-  max-width: 1400px;
+  max-width: 1600px; /* Increased from 1400px for wider layout */
   margin: 0 auto;
   height: 90vh;
   display: flex;
@@ -200,7 +200,7 @@
 
 .ig-grid-row {
   display: grid;
-  grid-template-columns: 50px 2fr 1.5fr 120px 100px 120px;
+  grid-template-columns: 50px 2fr 2.5fr 120px 100px 120px; /* Increased Media column from 1.5fr to 2.5fr */
   border-bottom: 1px solid var(--border-light);
   transition: all 0.2s ease;
   cursor: pointer;
@@ -253,68 +253,85 @@
 }
 
 .ig-media-cell {
-  justify-content: center;
+  justify-content: flex-start;
+  padding: 1rem;
+  min-height: 120px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  margin: 0.25rem;
+  box-shadow: var(--shadow-sm);
 }
 
 .ig-media-options {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
 }
 
 .ig-media-option-group {
   display: flex;
-  gap: 0.25rem;
-}
-
-.ig-media-input {
-  display: none;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .ig-media-option-btn {
   flex: 1;
-  padding: 0.5rem;
+  padding: 0.75rem;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
   color: var(--text-primary);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
-  transition: all 0.2s ease;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
   text-decoration: none;
+  box-shadow: var(--shadow-sm);
 }
 
 .ig-media-option-btn:hover {
   background: var(--bg-tertiary);
   border-color: var(--primary-color);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .ig-media-option-btn.upload-btn {
-  background: var(--primary-light);
+  background: linear-gradient(135deg, var(--primary-light) 0%, rgba(228, 64, 95, 0.1) 100%);
   border-color: var(--primary-color);
   color: var(--primary-color);
+  font-weight: 600;
 }
 
 .ig-media-option-btn.generate-btn {
-  background: var(--success-light);
+  background: linear-gradient(135deg, var(--success-light) 0%, rgba(16, 185, 129, 0.1) 100%);
   border-color: var(--success-color);
   color: var(--success-color);
+  font-weight: 600;
 }
 
 .ig-media-option-btn.upload-btn:hover {
   background: var(--primary-color);
   color: white;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .ig-media-option-btn.generate-btn:hover {
   background: var(--success-color);
   color: white;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .ig-media-preview {
@@ -645,20 +662,21 @@
 /* Responsive Design */
 @media (max-width: 1024px) {
   .ig-bulk-composer {
-    height: 95vh;
+    max-width: 95vw;
   }
   
   .ig-grid-row {
-    grid-template-columns: 50px 1.5fr 1.2fr 100px 80px 100px;
+    grid-template-columns: 40px 1.5fr 2fr 100px 80px 100px; /* Adjusted for medium screens */
   }
   
   .ig-composer-controls {
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
   
   .ig-time-shift-controls {
-    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.25rem;
   }
 }
 
@@ -1158,4 +1176,518 @@
   background: #eee;
   color: #aaa;
   cursor: not-allowed;
-} 
+} /* 
+Thumbnail Styles for Reels */
+.thumbnail-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  border: none !important;
+  font-size: 0.75rem !important;
+  padding: 0.4rem 0.6rem !important;
+  margin-top: 0.25rem !important;
+}
+
+.thumbnail-btn:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
+  transform: translateY(-1px) !important;
+}
+
+.ig-reel-preview {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1rem !important;
+  width: 100% !important;
+  padding: 0.75rem !important;
+  background: var(--bg-primary) !important;
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.ig-reel-video {
+  position: relative !important;
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden !important;
+  background: var(--bg-tertiary) !important;
+  box-shadow: var(--shadow-md) !important;
+  border: 2px solid var(--border-color) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0.75rem !important;
+  min-height: 80px !important;
+}
+
+.ig-reel-video video {
+  width: calc(100% - 80px) !important; /* Leave space for action buttons */
+  height: 80px !important;
+  object-fit: cover !important;
+  border-radius: var(--radius-md) !important;
+  display: block !important;
+  flex: 1 !important;
+}
+
+.ig-reel-video-actions {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+  margin-left: 0.75rem !important;
+  flex-shrink: 0 !important;
+}
+
+.ig-reel-video-view,
+.ig-reel-video-close {
+  position: relative !important;
+  top: auto !important;
+  right: auto !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 50% !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  flex-shrink: 0 !important;
+}
+
+.ig-reel-video-view {
+  background: rgba(59, 130, 246, 0.9) !important;
+}
+
+.ig-reel-video-view:hover {
+  background: #3b82f6 !important;
+  transform: scale(1.1) !important;
+}
+
+.ig-reel-video-close {
+  background: rgba(239, 68, 68, 0.9) !important;
+}
+
+.ig-reel-video-close:hover {
+  background: var(--danger-color) !important;
+  transform: scale(1.1) !important;
+}
+
+.ig-reel-video-view svg,
+.ig-reel-video-close svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+.ig-reel-label {
+  position: absolute !important;
+  top: 0.75rem !important;
+  left: 0.75rem !important;
+  background: rgba(0, 0, 0, 0.8) !important;
+  color: white !important;
+  padding: 0.375rem 0.75rem !important;
+  border-radius: var(--radius-md) !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  backdrop-filter: blur(4px) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.ig-reel-thumbnail {
+  position: relative !important;
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden !important;
+  background: var(--bg-tertiary) !important;
+  border: 2px solid var(--primary-color) !important;
+  box-shadow: var(--shadow-md) !important;
+  transition: all 0.3s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0.75rem !important;
+  min-height: 80px !important;
+}
+
+.ig-reel-thumbnail:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.ig-reel-thumbnail img {
+  width: calc(100% - 60px) !important; /* Leave space for close button */
+  height: 80px !important;
+  object-fit: cover !important;
+  border-radius: var(--radius-md) !important;
+  display: block !important;
+  flex: 1 !important;
+}
+
+.ig-reel-thumbnail-close {
+  position: relative !important;
+  top: auto !important;
+  right: auto !important;
+  background: rgba(239, 68, 68, 0.9) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 50% !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  margin-left: 0.75rem !important;
+  flex-shrink: 0 !important;
+}
+
+.ig-reel-thumbnail-close:hover {
+  background: var(--danger-color) !important;
+  transform: scale(1.1) !important;
+}
+
+.ig-reel-thumbnail-close svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+.ig-thumbnail-label {
+  position: absolute !important;
+  top: 0.75rem !important;
+  left: 0.75rem !important;
+  background: rgba(228, 64, 95, 0.95) !important;
+  color: white !important;
+  padding: 0.375rem 0.75rem !important;
+  border-radius: var(--radius-md) !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  backdrop-filter: blur(4px) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* Enhanced Media Options for Reels */
+.ig-media-option-group {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+.ig-media-option-btn.thumbnail-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: 2px solid transparent !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.ig-media-option-btn.thumbnail-btn::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: -100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent) !important;
+  transition: left 0.6s ease !important;
+}
+
+.ig-media-option-btn.thumbnail-btn:hover::before {
+  left: 100% !important;
+}
+
+/* Responsive Design for Thumbnails */
+@media (max-width: 768px) {
+  .ig-reel-preview {
+    flex-direction: column !important;
+  }
+  
+  .ig-reel-video video,
+  .ig-reel-thumbnail img {
+    height: 100px !important;
+  }
+  
+  .thumbnail-btn {
+    font-size: 0.7rem !important;
+    padding: 0.3rem 0.5rem !important;
+  }
+}
+
+/* Animation for Thumbnail Upload */
+@keyframes thumbnailUpload {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.ig-reel-thumbnail {
+  animation: thumbnailUpload 0.3s ease-out !important;
+}
+
+/* Status Indicators for Reels with Thumbnails */
+.ig-status-badge.ig-status-ready {
+  background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%) !important;
+}
+
+.ig-reel-preview .ig-status-indicator {
+  position: absolute !important;
+  top: 0.5rem !important;
+  right: 0.5rem !important;
+  background: var(--success-color) !important;
+  color: white !important;
+  border-radius: 50% !important;
+  width: 20px !important;
+  height: 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.7rem !important;
+}/* Lo
+ading State for Thumbnail Upload */
+.thumbnail-btn.uploading {
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%) !important;
+  cursor: not-allowed !important;
+  opacity: 0.7 !important;
+}
+
+.thumbnail-btn.uploading:hover {
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%) !important;
+  transform: none !important;
+}
+
+.spinning {
+  animation: spin 1s linear infinite !important;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Enhanced Thumbnail Preview with Success Indicator */
+.ig-reel-thumbnail.uploaded {
+  border: 2px solid var(--success-color) !important;
+  background: var(--success-light) !important;
+}
+
+.ig-reel-thumbnail.uploaded::after {
+  content: '✓' !important;
+  position: absolute !important;
+  bottom: 0.25rem !important;
+  right: 0.25rem !important;
+  background: var(--success-color) !important;
+  color: white !important;
+  border-radius: 50% !important;
+  width: 16px !important;
+  height: 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.6rem !important;
+  font-weight: bold !important;
+}
+
+/* Disabled state for thumbnail input during upload */
+.ig-media-input:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+/* Success message styling */
+.thumbnail-success-message {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  background: rgba(16, 185, 129, 0.9) !important;
+  color: white !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: var(--radius-md) !important;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  z-index: 10 !important;
+  animation: fadeInOut 2s ease-in-out !important;
+}
+
+@keyframes fadeInOut {
+  0%, 100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+/* Medi
+a action buttons container */
+.ig-media-actions {
+  display: none !important;
+}
+
+.view-media-btn,
+.remove-media-btn {
+  display: none !important;
+}
+
+/* Media preview positioning */
+.ig-media-preview {
+  position: relative;
+}
+
+.ig-media-preview-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.5rem;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.ig-media-preview {
+  width: 100%;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+}
+
+.ig-media-preview:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.ig-media-preview img,
+.ig-media-preview video {
+  max-width: 100%;
+  max-height: 120px;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
+  display: block;
+}
+
+.ig-reel-thumbnail-upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, var(--primary-light) 0%, rgba(228, 64, 95, 0.05) 100%);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--primary-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.ig-media-option-btn.thumbnail-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: 2px solid transparent !important;
+  position: relative !important;
+  overflow: hidden !important;
+  color: white !important;
+  font-weight: 600 !important;
+  padding: 0.75rem !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-sm) !important;
+  transition: all 0.3s ease !important;
+}
+
+.ig-media-option-btn.thumbnail-btn:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: var(--shadow-lg) !important;
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
+}
+
+.ig-media-option-btn.thumbnail-btn::before {
+  content: '' !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: -100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent) !important;
+  transition: left 0.6s ease !important;
+}
+
+.ig-media-option-btn.thumbnail-btn:hover::before {
+  left: 100% !important;
+}
+
+.ig-media-input {
+  display: none;
+}
+
+/* Enhanced status indicators for media */
+.ig-media-status-indicator {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--success-color);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+/* Enhanced loading states */
+.ig-media-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.ig-media-loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Professional hover effects for media containers */
+.ig-media-cell:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+  transition: all 0.3s ease;
+}
+
+.ig-reel-preview:hover {
+  box-shadow: var(--shadow-lg) !important;
+  transform: translateY(-2px) !important;
+  transition: all 0.3s ease !important;
+}

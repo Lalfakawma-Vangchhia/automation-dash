@@ -249,7 +249,8 @@ class InstagramService:
     async def create_post(self, instagram_user_id: str, page_access_token: str, 
                    caption: str, image_url: Optional[str] = None, video_url: Optional[str] = None, 
                    video_file_path: Optional[str] = None, video_filename: Optional[str] = None, is_reel: bool = False, 
-                   thumbnail_url: Optional[str] = None, thumbnail_filename: Optional[str] = None) -> Dict:
+                   thumbnail_url: Optional[str] = None, thumbnail_filename: Optional[str] = None,
+                   thumbnail_file_path: Optional[str] = None) -> Dict:
         """Create Instagram post or reel"""
         try:
             # Validation
@@ -306,14 +307,23 @@ class InstagramService:
                 })
                 
                 # Handle thumbnail for reels
+                final_thumbnail_url = None
                 if thumbnail_url and thumbnail_url.strip():
-                    media_params['cover_url'] = thumbnail_url.strip()
+                    final_thumbnail_url = thumbnail_url.strip()
+                elif thumbnail_file_path and os.path.exists(thumbnail_file_path):
+                    upload_result = cloudinary_service.upload_image_with_instagram_transform(thumbnail_file_path)
+                    if upload_result["success"]:
+                        final_thumbnail_url = upload_result["url"]
                 elif thumbnail_filename:
                     thumb_path = os.path.join("temp_images", thumbnail_filename)
                     if os.path.exists(thumb_path):
                         upload_result = cloudinary_service.upload_image_with_instagram_transform(thumb_path)
                         if upload_result["success"]:
-                            media_params['cover_url'] = upload_result["url"]
+                            final_thumbnail_url = upload_result["url"]
+                
+                if final_thumbnail_url:
+                    media_params['cover_url'] = final_thumbnail_url
+                    logger.info(f"Using thumbnail URL for reel: {final_thumbnail_url}")
             else:
                 if not image_url or not image_url.strip():
                     return {"success": False, "error": "Image URL is required for photo posts"}
@@ -389,7 +399,8 @@ class InstagramService:
             return {
                 "success": True, 
                 "post_id": publish_result.get('id'), 
-                "creation_id": creation_id
+                "creation_id": creation_id,
+                "reel_thumbnail_url": final_thumbnail_url if is_reel else None
             }
             
         except requests.exceptions.RequestException as e:
