@@ -58,12 +58,17 @@ async def log_requests(request: Request, call_next):
 # Add CORS middleware with explicit configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins in development
+    allow_origins=["*"] if settings.debug else [
+        "http://localhost:3000",
+        "https://localhost:3000",
+        "http://localhost:8000",
+        "https://localhost:8000"
+    ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
-    max_age=3600,  # Cache preflight requests for 1 hour
+    max_age=3600,
 )
 
 # Add trusted host middleware for production
@@ -266,4 +271,4 @@ if __name__ == "__main__":
         logger.info("Server stopped by user")
     except Exception as e:
         logger.error(f"Server error: {e}")
-        sys.exit(1) 
+        sys.exit(1)

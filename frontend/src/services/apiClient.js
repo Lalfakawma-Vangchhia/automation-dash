@@ -410,6 +410,62 @@ class ApiClient {
     }
   }
 
+  // Upload thumbnail to Cloudinary for Instagram reels
+  async uploadThumbnailToCloudinary(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    // Use custom FormData upload method
+    const url = `${this.baseURL}/social/instagram/upload-thumbnail`;
+    const config = {
+      method: 'POST',
+      body: formData,
+    };
+
+    // Add authorization header manually for FormData
+    if (this.token) {
+      config.headers = {
+        'Authorization': `Bearer ${this.token}`
+      };
+    }
+
+    try {
+      console.log(`🔍 DEBUG: Uploading thumbnail to Cloudinary via ${url}`);
+      const response = await fetch(url, config);
+      
+      if (!response.ok) {
+        let errorData = {};
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          console.warn('Failed to parse error response as JSON');
+        }
+        
+        let errorMessage = 'Unknown error occurred';
+        if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else if (errorData.error) {
+          errorMessage = errorData.error;
+        } else if (errorData.detail) {
+          errorMessage = errorData.detail;
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        } else {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const responseData = await response.json();
+      console.log(`Thumbnail upload response:`, responseData);
+      return responseData;
+    } catch (error) {
+      console.error(`Thumbnail upload error:`, error);
+      throw error;
+    }
+  }
+
   // Upload video to Cloudinary for Instagram
   async uploadVideoToCloudinary(file) {
     const formData = new FormData();
