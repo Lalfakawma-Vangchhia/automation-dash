@@ -391,96 +391,79 @@ Generate a caption that follows the custom strategy template."""
     async def generate_caption_with_custom_strategy(
         self,
         custom_strategy: Dict[str, str],
-        max_length: int = 2000
+        context: str = "",
+        max_length: int = 2000,
+        strategy_type: str = "custom"
     ) -> Dict[str, Any]:
         """
-        Generate a caption using structured brand information.
-        
-        Args:
-            custom_strategy: Dictionary containing structured brand information including:
-                - brandName: Name of the brand
-                - hookIdea: Engaging hook or question
-                - features: List of features/benefits (one per line)
-                - location: Business location
-                - phone: Contact phone number
-                - website: Business website URL
-                - callToAction: Call to action text
-            max_length: Maximum length of the generated caption
-            
-        Returns:
-            Dict containing the generated caption
+        Generate a caption using structured brand information for 'custom' strategy, or a static/semi-dynamic template for other strategies.
         """
         try:
-            # Extract values with defaults (matching frontend field names)
-            brand_name = custom_strategy.get('brandName', '').strip()
-            hook_idea = custom_strategy.get('hookIdea', '').strip()
-            features = custom_strategy.get('features', '').strip()
-            location = custom_strategy.get('location', '').strip()
-            phone = custom_strategy.get('phone', '').strip()
-            website = custom_strategy.get('website', '').strip()
-            call_to_action = custom_strategy.get('callToAction', '').strip()
+            def is_provided(val):
+                return bool(val and val.strip() and val.strip().lower() not in ['not provided', 'n/a', 'none', '-'])
 
-            # Format features as a checklist
-            formatted_features = ''
-            if features:
-                feature_list = [f.strip() for f in features.split('\n') if f.strip()]
-                formatted_features = '\n'.join([f'✅ {f}' for f in feature_list])
+            # Only for 'custom' strategy, use dynamic structured template
+            if strategy_type == "custom":
+                brand_name = custom_strategy.get('brandName', '').strip()
+                hook_idea = custom_strategy.get('hookIdea', '').strip()
+                features = custom_strategy.get('features', '').strip()
+                location = custom_strategy.get('location', '').strip()
+                phone = custom_strategy.get('phone', '').strip()
+                website = custom_strategy.get('website', '').strip()
+                call_to_action = custom_strategy.get('callToAction', '').strip()
 
-            # Format contact information
-            contact_info = []
-            if location:
-                contact_info.append(f'📍 {location}')
-            if phone:
-                contact_info.append(f'📞 {phone}')
-            if website:
-                # Ensure website has proper URL format
-                website_url = website if website.startswith(('http://', 'https://')) else f'https://{website}'
-                contact_info.append(f'🌐 {website_url}')
-            
-            contact_block = '\n'.join(contact_info)
+                formatted_features = ''
+                if is_provided(features):
+                    feature_list = [f.strip() for f in features.split('\n') if is_provided(f)]
+                    formatted_features = '\n'.join([f'✅ {f}' for f in feature_list])
 
-            # Construct the structured prompt
-            structured_prompt = f"""**Brand Name:**
-{brand_name}
+                contact_info = []
+                if is_provided(location):
+                    contact_info.append(f'📍 {location}')
+                if is_provided(phone):
+                    contact_info.append(f'📞 {phone}')
+                if is_provided(website):
+                    website_url = website if website.startswith(('http://', 'https://')) else f'https://{website}'
+                    contact_info.append(f'🌐 {website_url}')
+                contact_block = '\n'.join(contact_info)
 
-**Hook/Idea:**
-{hook_idea}
+                structured_prompt = f"""**Brand Name:**\n{brand_name}\n\n**Hook/Idea:**\n{hook_idea}\n\n**Key Features/Benefits:**\n{formatted_features}\n\n**Contact Information:**\n{contact_block}\n\n**Call to Action:**\n{call_to_action}"""
 
-**Key Features/Benefits:**
-{formatted_features}
+                system_prompt = """You are an expert social media marketing copywriter specializing in creating compelling, high-conversion Instagram posts for businesses.\n\nYour task is to generate a detailed and structured Instagram caption based on the provided brand information.Follow this exact format and structure:\n\n1. **Hook:** Start with an engaging question or a bold statement to grab the reader's attention. Use a relevant emoji at the beginning of this line.\n2. **Introduction:** Briefly introduce the brand and its main value proposition.\n3. **Feature List:** Present the key features or benefits as a checklist. Each feature starts with a '✅' emoji.\n4. **Contact/Location Information:** Include only the details that are actually provided (📍 for location, 📞 for phone, 🌐 for website). If any piece of info is missing, omit it entirely without adding placeholders or filler.\n5. **Call to Action (CTA):** End with a strong, concluding sentence that encourages the user to take the next step.using only the user-supplied CTA.\n6. **Hashtags:** Generate a block of 10-15 relevant, niche, and popular hashtags at the very end of the caption.\n7.  **Do not add header or footer at all, just the caption along with the information provided by the user**\n8. **Do not generate or infer missing data (e.g., do not fabricate emails or taglines).**\n9. **Strictly avoid phrases like '[info not provided]', '[not specified]', or similar. If something is not provided, skip it silently.**\n10. **Ensure the final caption reads smoothly, feels complete, and is based only on the user’s input. No blank fields or unnatural gaps.**\n\nMake sure the caption is engaging, on-brand, and encourages interaction. Keep it under {max_length} characters.\n"""
+                user_prompt = f"Generate an engaging Instagram caption using this brand information. Focus on creating a natural, compelling narrative that highlights the brand's unique value proposition while incorporating all the provided details. The caption should be optimized for engagement and conversions.\n\n{structured_prompt}"
+            else:
+                # All other strategies use their own static/semi-dynamic templates, no dynamic brand/location/website injection
+                strategy_type_lc = strategy_type.lower().strip()
+                if strategy_type_lc == "customer spotlight":
+                    system_prompt = "You are a social media manager creating a 'Customer Spotlight' post. Highlight real customer testimonials and experiences. Use a warm, authentic tone. Start with a hook, then list 2-3 short, powerful customer quotes (use realistic names), and end with a call to action. Include 2-3 relevant hashtags. Do not add headers, footers, or explanations."
+                    user_prompt = "💬 Don't just take our word for it...\n\nHear from our satisfied customers who've achieved incredible results with our solutions!\n\n✅ 'I was blown away by the personalized support and guidance I received. My business has never been more profitable!' - Rachel P.\n✅ 'Their innovative approach helped me streamline my operations and increase efficiency by 30%!' - John D.\n✅ 'The team's expertise and passion for excellence is unmatched. I couldn't be happier with the results!' - Emily G.\n\nReady to experience success like our customers? Let us help you achieve your goals!\n\n#SuccessStories #CustomerTestimonials #BusinessGrowth #InnovativeSolutions #PersonalizedSupport #StreamlinedOperations #EfficiencyExperts #PassionForExcellence"
+                elif strategy_type_lc == "daily inspiration" or strategy_type_lc == "daily motivation":
+                    system_prompt = "You are a motivational speaker and social media influencer. Generate a daily inspirational post that uplifts and energizes the audience. Use a positive, encouraging tone, and include 1-2 relevant emojis. Keep it concise and authentic. Do not add any headers, footers, or explanations."
+                    user_prompt = 'Growth isn’t found in comfort—it’s found in courage. Face yourself, and you’ll unlock your real potential.\n.\n.\n.\nFollow @successsayings__, @positively_vibing_daily, @dailyinspirationquotes00 for more daily motivation that fuels your mindset.\n.\n.\n.\nLike | Comment | Share\n.\n.\n.\n#motivation #success #inspiration #positivevibes #faith #successsayings #nevergiveup #successmindset #foryou #grateful #quote #wealth #quoteoftheday #growth'
+                elif strategy_type_lc == "behind the scenes":
+                    system_prompt = "You are a social media storyteller. Write a 'Behind the Scenes' post that gives followers a glimpse into the team's daily work, culture, or creative process. Use a friendly, inclusive tone. Start with a hook, describe 2-3 interesting activities or facts, and end with an invitation to follow or engage. Include 2-3 relevant hashtags. Do not add headers, footers, or explanations."
+                    user_prompt = "👀 Ever wondered what goes on behind the scenes of a successful business?\n\nMeet our team, the masterminds behind the magic! We're a group of dedicated individuals passionate about delivering exceptional results.\n\nGet a glimpse of our daily routine:\n✅ Morning brainstorming sessions to tackle new challenges\n✅ Collaborative workshops to drive innovation\n✅ Continuous learning and skill-building to stay ahead of the curve\n\nStay tuned for more behind-the-scenes content, and get ready to meet the people who make it all happen!\n\n#BehindTheScenes #BusinessLife #TeamWork #InnovationNation #CollaborationMatters #MeetTheTeam #BusinessGrowth #CompanyCulture"
+                elif strategy_type_lc == "product showcase":
+                    system_prompt = "You are a creative marketer. Write a product showcase post that highlights the product's unique features and benefits. Use a friendly, persuasive tone, and include 1-2 relevant emojis. List 2-3 product highlights as bullet points. End with a call to action and 2-3 hashtags. Do not add any headers, footers, or explanations."
+                    user_prompt = "🎉 Want to take your product game to the next level?\n\nAt [Brand Name], we're passionate about helping you showcase your best products in the most engaging way possible.\n\nDiscover our top picks:\n✅ Stunning product visuals that grab attention\n✅ Compelling product descriptions that drive sales\n✅ Effective product categorization for easy browsing\n\n🌐 Learn more about our product highlighting solutions at [website URL]\n\nElevate your product showcase and boost conversions today!\n\n#ProductShowcase #EcommerceSolutions #ProductMarketing #VisualCommerce #ProductDescription #ProductCategorization #ConversionOptimization #EcommerceGrowth #ProductHighlighting #OnlineShoppingExperience"
+                elif strategy_type_lc == "industry tips":
+                    system_prompt = "You are an industry expert sharing valuable tips and insights. Write a post that provides 2-3 actionable tips or insights for your audience. Use a helpful, authoritative tone. Start with a hook, list the tips, and end with a call to action. Include 2-3 relevant hashtags. Do not add headers, footers, or explanations."
+                    user_prompt = "💡 Want to stay ahead of the curve in your industry?\n\nGet insider knowledge and expert advice from the forefront of innovation.\n\nStay informed with our latest insights:\n✅ Industry trends and forecasts\n✅ Proven strategies for success\n✅ Exclusive interviews with thought leaders\n\n📅 Mark your calendar for July 28, 2025, and get ready to elevate your game!\n\nTake the first step towards industry dominance. Follow us for more valuable tips and insights.\n\n#IndustryInsights #StayAhead #BusinessTips #InnovationNation #SuccessStrategies #ThoughtLeadership #IndustryTrends #ForecastingSuccess #ElevateYourGame"
+                elif strategy_type_lc == "lifestyle content":
+                    system_prompt = "You are a lifestyle influencer. Write a post that shares relatable, aspirational, or entertaining lifestyle content. Use a friendly, authentic tone, and include 1-2 relevant emojis. End with a call to action and 2-3 hashtags. Do not add headers, footers, or explanations."
+                    user_prompt = "🌿 Embrace the little moments that make life beautiful! Whether it's a morning coffee ritual or a sunset stroll, find joy in the everyday.\n\nShare your favorite daily ritual in the comments below!\n\n#Lifestyle #LiveWell #EverydayJoy #MindfulMoments #SimplePleasures #WellnessJourney"
+                elif strategy_type_lc == "user generated content":
+                    system_prompt = "You are a social media manager. Write a post that highlights and credits user-generated content from your community. Use a grateful, community-focused tone, and include 1-2 relevant emojis. Mention the user (e.g., @username) and encourage others to share. End with 2-3 hashtags. Do not add headers, footers, or explanations."
+                    user_prompt = "🙌 Huge thanks to @amazinguser for sharing this incredible photo! We love seeing how you use our products in your daily life.\n\nWant to be featured? Tag us in your posts and use #OurBrandCommunity for a chance to be spotlighted!\n\n#UserGeneratedContent #CommunityLove #FeaturedFan"
+                else:
+                    system_prompt = "You are a social media content creator. Write a post based on the following context. Do not add any headers, footers, or explanations."
+                    user_prompt = context or "Generate a social media post."
 
-**Contact Information:**
-{contact_block}
-
-**Call to Action:**
-{call_to_action}"""
-
-            # System prompt for the AI
-            system_prompt = """You are an expert social media marketing copywriter specializing in creating compelling, high-conversion Instagram posts for businesses.
-
-Your task is to generate a detailed and structured Instagram caption based on the provided brand information.Follow this exact format and structure:
-
-1. **Hook:** Start with an engaging question or a bold statement to grab the reader's attention. Use a relevant emoji at the beginning of this line.
-2. **Introduction:** Briefly introduce the brand and its main value proposition.
-3. **Feature List:** Present the key features or benefits as a checklist. Each feature starts with a '✅' emoji.
-4. **Contact/Location Information:** Include only the details that are actually provided (📍 for location, 📞 for phone, 🌐 for website). If any piece of info is missing, omit it entirely without adding placeholders or filler.
-5. **Call to Action (CTA):** End with a strong, concluding sentence that encourages the user to take the next step.using only the user-supplied CTA.
-6. **Hashtags:** Generate a block of 10-15 relevant, niche, and popular hashtags at the very end of the caption.
-7.  **Do not add header or footer at all, just the caption along with the information provided by the user**
-8. **Do not generate or infer missing data (e.g., do not fabricate emails or taglines).**
-9. **Strictly avoid phrases like '[info not provided]', '[not specified]', or similar. If something is not provided, skip it silently.**
-10. **Ensure the final caption reads smoothly, feels complete, and is based only on the user’s input. No blank fields or unnatural gaps.**
-
-
-Make sure the caption is engaging, on-brand, and encourages interaction. Keep it under {max_length} characters.
-"""
-
-            # Generate content using Groq
             completion = self.client.chat.completions.create(
                 model="llama3-70b-8192",
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Generate an engaging Instagram caption using this brand information. Focus on creating a natural, compelling narrative that highlights the brand's unique value proposition while incorporating all the provided details. The caption should be optimized for engagement and conversions.\n\n{structured_prompt}"}
+                    {"role": "user", "content": user_prompt}
                 ],
                 max_tokens=1000,
                 temperature=0.7,
@@ -488,9 +471,7 @@ Make sure the caption is engaging, on-brand, and encourages interaction. Keep it
                 stream=False
             )
 
-            # Extract and return the generated caption
             generated_caption = completion.choices[0].message.content.strip()
-            
             return {
                 "success": True,
                 "content": generated_caption,
