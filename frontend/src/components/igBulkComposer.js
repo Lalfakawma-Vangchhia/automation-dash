@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 
 function IgBulkComposer({ selectedAccount, onClose }) {
   const { user } = useAuth();
-  
+
   // Strategy step state
   const [strategyData, setStrategyData] = useState({
     promptTemplate: '',
@@ -32,7 +32,7 @@ function IgBulkComposer({ selectedAccount, onClose }) {
   const [selectedRows, setSelectedRows] = useState([]);
   const [editingCell, setEditingCell] = useState(null);
   const [dragStartRow, setDragStartRow] = useState(null);
-  
+
   // Post type state
   const [postType, setPostType] = useState('photo'); // photo, carousel, reel
   const [carouselImageCount, setCarouselImageCount] = useState(3);
@@ -98,9 +98,11 @@ function IgBulkComposer({ selectedAccount, onClose }) {
         caption: '',
         mediaFile: null,
         mediaPreview: null,
-          postType: postType.toLowerCase(),
-          carouselImageCount: carouselImageCount,
-          carouselImages: [],
+        thumbnailFile: null,
+        thumbnailPreview: null,
+        postType: postType.toLowerCase(),
+        carouselImageCount: carouselImageCount,
+        carouselImages: [],
         scheduledDate: formattedDate,
         scheduledTime: strategyData.timeSlot,
         status: 'draft',
@@ -142,6 +144,8 @@ function IgBulkComposer({ selectedAccount, onClose }) {
             caption: '',
             mediaFile: null,
             mediaPreview: null,
+            thumbnailFile: null,
+            thumbnailPreview: null,
             postType: postType.toLowerCase(),
             carouselImageCount: carouselImageCount,
             carouselImages: [],
@@ -170,10 +174,10 @@ function IgBulkComposer({ selectedAccount, onClose }) {
       }
       return newData;
     });
-    
+
     // If prompt template is selected, apply it to all rows
     if (field === 'promptTemplate' && value && value !== 'custom') {
-      setComposerRows(prev => 
+      setComposerRows(prev =>
         prev.map(row => ({
           ...row,
           caption: value
@@ -185,7 +189,7 @@ function IgBulkComposer({ selectedAccount, onClose }) {
   // Update post type for all rows
   const handlePostTypeChange = (newPostType) => {
     setPostType(newPostType);
-    setComposerRows(prev => 
+    setComposerRows(prev =>
       prev.map(row => ({
         ...row,
         postType: newPostType.toLowerCase(),
@@ -193,7 +197,10 @@ function IgBulkComposer({ selectedAccount, onClose }) {
         carouselImages: newPostType === 'carousel' ? (row.carouselImages || []) : [],
         // Clear media for photo/reel when switching to carousel
         mediaFile: newPostType === 'carousel' ? null : row.mediaFile,
-        mediaPreview: newPostType === 'carousel' ? null : row.mediaPreview
+        mediaPreview: newPostType === 'carousel' ? null : row.mediaPreview,
+        // Clear thumbnail when switching away from reel
+        thumbnailFile: newPostType === 'reel' ? row.thumbnailFile : null,
+        thumbnailPreview: newPostType === 'reel' ? row.thumbnailPreview : null
       }))
     );
   };
@@ -201,7 +208,7 @@ function IgBulkComposer({ selectedAccount, onClose }) {
   // Update carousel image count for all rows
   const handleCarouselImageCountChange = (newCount) => {
     setCarouselImageCount(newCount);
-    setComposerRows(prev => 
+    setComposerRows(prev =>
       prev.map(row => ({
         ...row,
         carouselImageCount: row.postType === 'carousel' ? newCount : row.carouselImageCount
@@ -222,35 +229,35 @@ function IgBulkComposer({ selectedAccount, onClose }) {
   };
 
   const handleCellEdit = (rowId, field, value) => {
-    setComposerRows(prev => 
-      prev.map(row => 
+    setComposerRows(prev =>
+      prev.map(row =>
         row.id === rowId
           ? {
-              ...row,
-              [field]: field === 'postType' ? value.toLowerCase() : value,
-              status: (() => {
-                // For carousel posts, check if we have enough images
-                if (field === 'postType' && value.toLowerCase() === 'carousel') {
-                  return 'draft'; // Reset status when switching to carousel
-                }
-                
-                // For carousel posts, validate image count
-                if (row.postType === 'carousel') {
-                  const hasCaption = (row.caption || '').trim();
-                  const hasEnoughImages = (row.carouselImages || []).length >= 3;
-                  return hasCaption && hasEnoughImages ? 'ready' : 'draft';
-                }
-                
-                // For other post types, use existing logic
-                if (field === 'caption' || field === 'mediaFile' || field === 'mediaPreview') {
-                  const hasCaption = field === 'caption' ? value.trim() : (row.caption || '').trim();
-                  const hasMedia = field === 'mediaFile' ? value : (row.mediaFile || row.mediaPreview);
-                  return hasCaption && hasMedia ? 'ready' : 'draft';
-                }
-                
-                return row.status;
-              })()
-            }
+            ...row,
+            [field]: field === 'postType' ? value.toLowerCase() : value,
+            status: (() => {
+              // For carousel posts, check if we have enough images
+              if (field === 'postType' && value.toLowerCase() === 'carousel') {
+                return 'draft'; // Reset status when switching to carousel
+              }
+
+              // For carousel posts, validate image count
+              if (row.postType === 'carousel') {
+                const hasCaption = (row.caption || '').trim();
+                const hasEnoughImages = (row.carouselImages || []).length >= 3;
+                return hasCaption && hasEnoughImages ? 'ready' : 'draft';
+              }
+
+              // For other post types, use existing logic
+              if (field === 'caption' || field === 'mediaFile' || field === 'mediaPreview') {
+                const hasCaption = field === 'caption' ? value.trim() : (row.caption || '').trim();
+                const hasMedia = field === 'mediaFile' ? value : (row.mediaFile || row.mediaPreview);
+                return hasCaption && hasMedia ? 'ready' : 'draft';
+              }
+
+              return row.status;
+            })()
+          }
           : row
       )
     );
@@ -273,15 +280,15 @@ function IgBulkComposer({ selectedAccount, onClose }) {
     // --- PHOTO/CAROUSEL LOGIC (unchanged) ---
     const reader = new FileReader();
     reader.onload = (e) => {
-      setComposerRows(prev => 
-        prev.map(row => 
+      setComposerRows(prev =>
+        prev.map(row =>
           row.id === rowId
             ? {
-                ...row, 
-                mediaFile: file, 
-                mediaPreview: e.target.result,
-                status: (row.caption || '').trim() ? 'ready' : 'draft'
-              }
+              ...row,
+              mediaFile: file,
+              mediaPreview: e.target.result,
+              status: (row.caption || '').trim() ? 'ready' : 'draft'
+            }
             : row
         )
       );
@@ -298,24 +305,24 @@ function IgBulkComposer({ selectedAccount, onClose }) {
       }
 
       console.log(`Generating image for row ${rowId} with caption: ${row.caption.substring(0, 50)}...`);
-      
+
       // Truncate caption to 500 characters for image generation
       const imagePrompt = row.caption.trim().substring(0, 500);
       console.log(`Using image prompt (truncated): ${imagePrompt.substring(0, 100)}...`);
-      
+
       const response = await apiClient.generateInstagramImage(imagePrompt, 'feed');
-      
+
       if (response.success && response.data && response.data.image_url) {
         console.log(`Successfully generated image for row ${rowId}:`, response.data.image_url);
-        setComposerRows(prev => 
-          prev.map(r => 
+        setComposerRows(prev =>
+          prev.map(r =>
             r.id === rowId
               ? {
-              ...r, 
-                  mediaFile: null,
-                  mediaPreview: response.data.image_url,
-                  status: (r.caption || '').trim() ? 'ready' : 'draft'
-                }
+                ...r,
+                mediaFile: null,
+                mediaPreview: response.data.image_url,
+                status: (r.caption || '').trim() ? 'ready' : 'draft'
+              }
               : r
           )
         );
@@ -334,22 +341,22 @@ function IgBulkComposer({ selectedAccount, onClose }) {
       alert('Please select at least one row to generate captions for.');
       return;
     }
-    
+
     if (!strategyData.promptTemplate) {
       alert('Please select a strategy template first.');
       return;
     }
-    
+
     setIsScheduling(true);
     setScheduleProgress(0);
-    
+
     try {
       const selectedComposerRows = composerRows.filter(row => selectedRows.includes(row.id));
       const captions = [];
-      
+
       // Create the base prompt based on the selected template type
       let prompt = '';
-      
+
       if (strategyData.promptTemplate === 'custom') {
         // Build a detailed prompt for custom templates
         prompt = `
@@ -375,7 +382,7 @@ function IgBulkComposer({ selectedAccount, onClose }) {
         }
         prompt = selectedTemplate.prompt;
       }
-      
+
       // Generate captions for each selected row
       for (let i = 0; i < selectedComposerRows.length; i++) {
         try {
@@ -384,12 +391,12 @@ function IgBulkComposer({ selectedAccount, onClose }) {
             scheduledDate: row.scheduledDate,
             // Add any other context you want to include
           };
-          
+
           // Add context to the prompt
           const fullPrompt = `${prompt}\n\nContext: ${JSON.stringify(context, null, 2)}`;
-          
+
           const captionResponse = await apiClient.generateInstagramCaption(fullPrompt);
-          
+
           if (captionResponse.success) {
             captions.push({
               content: captionResponse.content || captionResponse.generated_text || 'No content generated',
@@ -414,16 +421,16 @@ function IgBulkComposer({ selectedAccount, onClose }) {
             error: error.message
           });
         }
-        
+
         // Update progress
         setScheduleProgress(Math.round(((i + 1) / selectedComposerRows.length) * 100));
       }
-      
+
       // Update the rows with generated captions
-      setComposerRows(prev => 
+      setComposerRows(prev =>
         prev.map(row => {
           if (!selectedRows.includes(row.id)) return row;
-          
+
           const caption = captions.find(c => c.context === row.scheduledDate);
           if (caption && caption.success) {
             return {
@@ -435,11 +442,11 @@ function IgBulkComposer({ selectedAccount, onClose }) {
           return row;
         })
       );
-      
+
       // Show success/failure summary
       const successCount = captions.filter(c => c.success).length;
       const failedCount = captions.length - successCount;
-      
+
       let message = '';
       if (successCount > 0 && failedCount === 0) {
         message = `Successfully generated captions for ${successCount} ${successCount === 1 ? 'post' : 'posts'}.`;
@@ -448,7 +455,7 @@ function IgBulkComposer({ selectedAccount, onClose }) {
       } else {
         message = 'Failed to generate any captions. Please try again.';
       }
-      
+
       alert(message);
     } catch (error) {
       console.error('Unexpected error in handleGenerateAllCaptions:', error);
@@ -470,10 +477,10 @@ function IgBulkComposer({ selectedAccount, onClose }) {
       const selectedComposerRows = composerRows.filter(row => selectedRows.includes(row.id));
       let successCount = 0;
       let errorCount = 0;
-      
+
       for (let i = 0; i < selectedComposerRows.length; i++) {
         const row = selectedComposerRows[i];
-        
+
         if (!row.caption || !(row.caption || '').trim()) {
           console.log(`Skipping image generation for row ${row.id} - no caption available`);
           continue;
@@ -481,25 +488,25 @@ function IgBulkComposer({ selectedAccount, onClose }) {
 
         try {
           console.log(`Generating image for row ${row.id} with caption: ${row.caption.substring(0, 50)}...`);
-          
+
           // Truncate caption to 500 characters for image generation
           const imagePrompt = row.caption.trim().substring(0, 500);
           console.log(`Using image prompt (truncated): ${imagePrompt.substring(0, 100)}...`);
-          
+
           // Generate image using Stability AI with the caption as prompt
           const response = await apiClient.generateInstagramImage(imagePrompt, 'feed');
-          
+
           if (response.success && response.data && response.data.image_url) {
             console.log(`Successfully generated image for row ${row.id}:`, response.data.image_url);
             setComposerRows(prev =>
               prev.map(r =>
                 r.id === row.id
-                  ? { 
-                      ...r, 
-                      mediaFile: null, 
-                      mediaPreview: response.data.image_url, 
-                      status: (r.caption || '').trim() ? 'ready' : 'draft' 
-                    }
+                  ? {
+                    ...r,
+                    mediaFile: null,
+                    mediaPreview: response.data.image_url,
+                    status: (r.caption || '').trim() ? 'ready' : 'draft'
+                  }
                   : r
               )
             );
@@ -513,7 +520,7 @@ function IgBulkComposer({ selectedAccount, onClose }) {
           errorCount++;
         }
       }
-      
+
       if (successCount > 0) {
         alert(`Image generation completed! Successfully generated ${successCount} images${errorCount > 0 ? `, ${errorCount} failed` : ''}`);
       } else {
@@ -549,15 +556,111 @@ function IgBulkComposer({ selectedAccount, onClose }) {
     setExpandedCaption(null);
   };
 
+  const handleThumbnailUpload = async (rowId, event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file for the thumbnail.');
+      return;
+    }
+
+    // Show loading state
+    setComposerRows(prev =>
+      prev.map(row =>
+        row.id === rowId
+          ? {
+            ...row,
+            thumbnailUploading: true
+          }
+          : row
+      )
+    );
+
+    try {
+      console.log(`📤 Uploading thumbnail for row ${rowId}: ${file.name}`);
+
+      // Upload thumbnail to Cloudinary via backend
+      const uploadResponse = await apiClient.uploadThumbnailToCloudinary(file);
+
+      if (uploadResponse && uploadResponse.success && uploadResponse.data && uploadResponse.data.url) {
+        console.log(`✅ Thumbnail uploaded successfully: ${uploadResponse.data.url}`);
+
+        // Update row with Cloudinary URL
+        setComposerRows(prev =>
+          prev.map(row =>
+            row.id === rowId
+              ? {
+                ...row,
+                thumbnailFile: null, // Clear file since we have URL now
+                thumbnailPreview: uploadResponse.data.url, // Use Cloudinary URL
+                thumbnailUrl: uploadResponse.data.url, // Store Cloudinary URL
+                thumbnailUploading: false
+              }
+              : row
+          )
+        );
+
+        alert('Thumbnail uploaded successfully! It will be optimized for Instagram reel cover image requirements.');
+      } else {
+        console.error(`❌ Failed to upload thumbnail:`, uploadResponse);
+        alert('Failed to upload thumbnail. Please try again.');
+
+        // Clear loading state
+        setComposerRows(prev =>
+          prev.map(row =>
+            row.id === rowId
+              ? {
+                ...row,
+                thumbnailUploading: false
+              }
+              : row
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error uploading thumbnail:', error);
+      alert(`Failed to upload thumbnail: ${error.message}`);
+
+      // Clear loading state
+      setComposerRows(prev =>
+        prev.map(row =>
+          row.id === rowId
+            ? {
+              ...row,
+              thumbnailUploading: false
+            }
+            : row
+        )
+      );
+    }
+  };
+
+  const handleRemoveThumbnail = (rowId) => {
+    setComposerRows(prev =>
+      prev.map(row =>
+        row.id === rowId ? {
+          ...row,
+          thumbnailFile: null,
+          thumbnailPreview: null,
+          thumbnailUrl: null // Clear Cloudinary URL as well
+        } : row
+      )
+    );
+  };
+
   const handleRemoveMedia = (rowId) => {
     setComposerRows(prev =>
       prev.map(row =>
-        row.id === rowId ? { 
-          ...row, 
-          mediaFile: null, 
-          mediaPreview: null, 
+        row.id === rowId ? {
+          ...row,
+          mediaFile: null,
+          mediaPreview: null,
+          thumbnailFile: null,
+          thumbnailPreview: null,
           carouselImages: row.postType === 'carousel' ? [] : null,
-          status: (row.caption || '').trim() ? 'draft' : 'draft' 
+          status: (row.caption || '').trim() ? 'draft' : 'draft'
         } : row
       )
     );
@@ -572,33 +675,33 @@ function IgBulkComposer({ selectedAccount, onClose }) {
       }
 
       console.log(`Generating carousel for row ${rowId} with caption: ${row.caption.substring(0, 50)}...`);
-      
+
       const imagePrompt = row.caption.trim().substring(0, 500);
       const imageCount = row.carouselImageCount || 3;
-      
+
       if (imageCount < 3 || imageCount > 7) {
         alert('Carousel must have between 3 and 7 images.');
         return;
       }
-      
+
       console.log(`🎨 Generating ${imageCount} carousel images with prompt: ${imagePrompt}`);
-      
+
       const response = await apiClient.generateInstagramCarousel(imagePrompt, imageCount);
-      
+
       if (response.success && response.image_urls && response.image_urls.length >= 3) {
         console.log(`Successfully generated carousel for row ${rowId}:`, response.image_urls);
-        setComposerRows(prev => 
-          prev.map(r => 
+        setComposerRows(prev =>
+          prev.map(r =>
             r.id === rowId
               ? {
-                  ...r, 
-                  carouselImages: response.image_urls,
-                  status: (() => {
-                    const hasCaption = (r.caption || '').trim();
-                    const hasEnoughImages = response.image_urls.length >= 3;
-                    return hasCaption && hasEnoughImages ? 'ready' : 'draft';
-                  })()
-                }
+                ...r,
+                carouselImages: response.image_urls,
+                status: (() => {
+                  const hasCaption = (r.caption || '').trim();
+                  const hasEnoughImages = response.image_urls.length >= 3;
+                  return hasCaption && hasEnoughImages ? 'ready' : 'draft';
+                })()
+              }
               : r
           )
         );
@@ -620,12 +723,12 @@ function IgBulkComposer({ selectedAccount, onClose }) {
     const row = composerRows.find(r => r.id === rowId);
     const maxImages = row.carouselImageCount || 3;
     const minImages = 3;
-    
+
     if (files.length < minImages) {
       alert(`Please select at least ${minImages} images for a carousel post.`);
       return;
     }
-    
+
     if (files.length > maxImages) {
       alert(`Please select only ${maxImages} images for this carousel.`);
       return;
@@ -633,22 +736,22 @@ function IgBulkComposer({ selectedAccount, onClose }) {
 
     try {
       console.log(`🖼️ Uploading ${files.length} carousel images for row ${rowId}`);
-      
+
       const imageUrls = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        
+
         // Validate file type
         if (!file.type.startsWith('image/')) {
           alert(`File ${file.name} is not an image. Please select only image files.`);
           continue;
         }
-        
+
         console.log(`📤 Uploading carousel image ${i + 1}/${files.length}: ${file.name}`);
-        
+
         // Upload to Cloudinary
         const uploadResponse = await apiClient.uploadImageToCloudinary(file);
-        
+
         if (uploadResponse && uploadResponse.success && uploadResponse.data && uploadResponse.data.url) {
           imageUrls.push(uploadResponse.data.url);
           console.log(`✅ Carousel image ${i + 1} uploaded: ${uploadResponse.data.url}`);
@@ -660,18 +763,18 @@ function IgBulkComposer({ selectedAccount, onClose }) {
       }
 
       if (imageUrls.length >= minImages) {
-        setComposerRows(prev => 
-          prev.map(r => 
+        setComposerRows(prev =>
+          prev.map(r =>
             r.id === rowId
               ? {
-                  ...r, 
-                  carouselImages: imageUrls,
-                  status: (() => {
-                    const hasCaption = (r.caption || '').trim();
-                    const hasEnoughImages = imageUrls.length >= 3;
-                    return hasCaption && hasEnoughImages ? 'ready' : 'draft';
-                  })()
-                }
+                ...r,
+                carouselImages: imageUrls,
+                status: (() => {
+                  const hasCaption = (r.caption || '').trim();
+                  const hasEnoughImages = imageUrls.length >= 3;
+                  return hasCaption && hasEnoughImages ? 'ready' : 'draft';
+                })()
+              }
               : r
           )
         );
@@ -679,7 +782,7 @@ function IgBulkComposer({ selectedAccount, onClose }) {
       } else {
         alert(`Please upload at least ${minImages} images for a carousel post.`);
       }
-      
+
       // Clear the file input
       if (carouselInputRefs.current[rowId]) {
         carouselInputRefs.current[rowId].value = '';
@@ -714,7 +817,7 @@ function IgBulkComposer({ selectedAccount, onClose }) {
   };
 
   const handleTimeShift = (direction) => {
-    setComposerRows(prev => 
+    setComposerRows(prev =>
       prev.map(row => {
         if (selectedRows.includes(row.id)) {
           const [hours, minutes] = row.scheduledTime.split(':');
@@ -749,15 +852,15 @@ function IgBulkComposer({ selectedAccount, onClose }) {
     if (!selectedAccount || composerRows.length === 0) return;
     setIsScheduling(true);
     setScheduleProgress(0);
-    
+
     try {
       const readyRows = composerRows.filter(row => row.status === 'ready');
       console.log(`🔄 Starting bulk scheduling for ${readyRows.length} posts...`);
-      
+
       // Progress tracking for media processing
       let processedCount = 0;
       const totalPosts = readyRows.length;
-      
+
       const postsWithMedia = await Promise.all(
         readyRows.map(async (row, index) => {
           const basePost = {
@@ -832,6 +935,17 @@ function IgBulkComposer({ selectedAccount, onClose }) {
                 media_file: await fileToBase64(row.mediaFile),
                 media_filename: row.mediaFile.name
               };
+
+              // Add thumbnail if available - prioritize Cloudinary URL over file
+              if (row.thumbnailUrl && row.thumbnailUrl.startsWith('http')) {
+                result.thumbnail_url = row.thumbnailUrl;
+              } else if (row.thumbnailPreview && row.thumbnailPreview.startsWith('http')) {
+                result.thumbnail_url = row.thumbnailPreview;
+              } else if (row.thumbnailFile) {
+                result.thumbnail_file = await fileToBase64(row.thumbnailFile);
+                result.thumbnail_filename = row.thumbnailFile.name;
+              }
+
               processedCount++;
               setScheduleProgress((processedCount / totalPosts) * 30);
               return result;
@@ -841,6 +955,17 @@ function IgBulkComposer({ selectedAccount, onClose }) {
                 media_file: row.mediaPreview,
                 media_filename: 'generated_video.mp4'
               };
+
+              // Add thumbnail if available - prioritize Cloudinary URL over file
+              if (row.thumbnailUrl && row.thumbnailUrl.startsWith('http')) {
+                result.thumbnail_url = row.thumbnailUrl;
+              } else if (row.thumbnailPreview && row.thumbnailPreview.startsWith('http')) {
+                result.thumbnail_url = row.thumbnailPreview;
+              } else if (row.thumbnailFile) {
+                result.thumbnail_file = await fileToBase64(row.thumbnailFile);
+                result.thumbnail_filename = row.thumbnailFile.name;
+              }
+
               processedCount++;
               setScheduleProgress((processedCount / totalPosts) * 30);
               return result;
@@ -860,21 +985,21 @@ function IgBulkComposer({ selectedAccount, onClose }) {
           return basePost;
         })
       );
-      
+
       // Final normalization: ensure all outgoing post_type values are lowercase
       const normalizedPostsWithMedia = postsWithMedia.map(post => ({
         ...post,
         post_type: (post.post_type || 'photo').toLowerCase()
       }));
-      
+
       const bulkData = {
         social_account_id: selectedAccount.id,
         posts: normalizedPostsWithMedia
       };
-      
+
       console.log(`🚀 Sending ${normalizedPostsWithMedia.length} posts to backend for scheduling...`);
       setScheduleProgress(40); // 40% for API call start
-      
+
       const response = await apiClient.bulkScheduleInstagramPosts(bulkData);
       setScheduleProgress(90); // 90% for API response
       console.log('Bulk schedule response:', response);
@@ -1007,14 +1132,14 @@ function IgBulkComposer({ selectedAccount, onClose }) {
   };
 
   const handleRemoveCarouselImages = (rowId) => {
-    setComposerRows(prev => 
-      prev.map(r => 
+    setComposerRows(prev =>
+      prev.map(r =>
         r.id === rowId
           ? {
-              ...r, 
-              carouselImages: [],
-              status: 'draft' // Always reset to draft when removing images
-            }
+            ...r,
+            carouselImages: [],
+            status: 'draft' // Always reset to draft when removing images
+          }
           : r
       )
     );
@@ -1026,38 +1151,38 @@ function IgBulkComposer({ selectedAccount, onClose }) {
     <div className="ig-bulk-composer">
       <div className="ig-bulk-composer-header">
         <h2>Instagram Bulk Composer</h2>
-        </div>
+      </div>
 
       <div className="ig-bulk-composer-content">
         {/* Strategy Step */}
         <div className="ig-strategy-step">
           <h3>Step 1: Strategy & Schedule</h3>
           <div className="ig-strategy-form">
-            
+
             {/* Post Type Selection */}
             <div className="ig-form-group">
               <label>Post Type</label>
               <div className="ig-post-type-toggle">
-                <button 
-                  className={postType === 'photo' ? 'active' : ''} 
+                <button
+                  className={postType === 'photo' ? 'active' : ''}
                   onClick={() => handlePostTypeChange('photo')}
                 >
                   📸 Photo
                 </button>
-                <button 
-                  className={postType === 'carousel' ? 'active' : ''} 
+                <button
+                  className={postType === 'carousel' ? 'active' : ''}
                   onClick={() => handlePostTypeChange('carousel')}
                 >
                   🖼️ Carousel
                 </button>
-                <button 
-                  className={postType === 'reel' ? 'active' : ''} 
+                <button
+                  className={postType === 'reel' ? 'active' : ''}
                   onClick={() => handlePostTypeChange('reel')}
                 >
                   🎬 Reel
                 </button>
               </div>
-              
+
               {/* Carousel Image Count */}
               {postType === 'carousel' && (
                 <div className="ig-form-group">
@@ -1079,39 +1204,25 @@ function IgBulkComposer({ selectedAccount, onClose }) {
                   </div>
                 </div>
               )}
-              
+
               {/* AI Image Prompt */}
-              {(postType === 'photo' || postType === 'carousel') && (
-                <div className="ig-form-group">
-                  <label>AI Image Prompt (Optional)</label>
-                  <textarea
-                    value={strategyData.imagePrompt || ''}
-                    onChange={(e) => handleStrategyChange('imagePrompt', e.target.value)}
-                    placeholder="Describe the images you want AI to generate (e.g., 'modern office setup', 'colorful abstract art')"
-                    className="ig-form-input"
-                    rows="2"
-                  />
-                  <small className="ig-form-help">
-                    Leave empty to use captions as image prompts, or specify custom prompts for AI image generation.
-                  </small>
-                </div>
-              )}
+
             </div>
-          <div className="ig-form-group">
+            <div className="ig-form-group">
               <label>Strategy Template</label>
-                  <select
+              <select
                 value={strategyData.promptTemplate}
                 onChange={(e) => handleStrategyChange('promptTemplate', e.target.value)}
-                    className="ig-form-select"
-                  >
+                className="ig-form-select"
+              >
                 <option value="">Select a template...</option>
                 {promptTemplates.map(template => (
                   <option key={template.id} value={template.prompt}>
                     {template.name}
                   </option>
                 ))}
-                  </select>
-                </div>
+              </select>
+            </div>
             {strategyData.promptTemplate === 'custom' && (
               <div className="ig-form-group">
                 <label>Brand Information</label>
@@ -1135,7 +1246,7 @@ function IgBulkComposer({ selectedAccount, onClose }) {
                     />
                   </div>
                 </div>
-                
+
                 <div className="ig-form-group">
                   <label>Features (one per line)</label>
                   <textarea
@@ -1194,16 +1305,16 @@ function IgBulkComposer({ selectedAccount, onClose }) {
               </div>
             )}
             <div className="ig-form-row">
-                <div className="ig-form-group">
-                  <label>Start Date</label>
-                  <input
-                    type="date"
+              <div className="ig-form-group">
+                <label>Start Date</label>
+                <input
+                  type="date"
                   value={strategyData.startDate}
                   onChange={(e) => handleStrategyChange('startDate', e.target.value)}
-                    className="ig-form-input"
-                  />
-                </div>
-                <div className="ig-form-group">
+                  className="ig-form-input"
+                />
+              </div>
+              <div className="ig-form-group">
                 <label>End Date (Optional)</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <input
@@ -1214,7 +1325,7 @@ function IgBulkComposer({ selectedAccount, onClose }) {
                     min={strategyData.startDate}
                     disabled={!strategyData.startDate}
                   />
-                <button
+                  <button
                     type="button"
                     onClick={() => handleStrategyChange('endDate', '')}
                     className="ig-btn ig-btn-secondary ig-btn-small"
@@ -1222,52 +1333,52 @@ function IgBulkComposer({ selectedAccount, onClose }) {
                     title="Clear end date (single day schedule)"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="18" y1="6" x2="6" y2="18"/>
-                      <line x1="6" y1="6" x2="18" y2="18"/>
-                      </svg>
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
                     Clear
-                </button>
-              </div>
+                  </button>
+                </div>
                 <small className="ig-form-help">
                   Leave empty for single day schedule
                 </small>
-            </div>
-                  <div className="ig-form-group">
-                    <label>Frequency</label>
-                    <select
-                      value={strategyData.frequency}
-                      onChange={(e) => handleStrategyChange('frequency', e.target.value)}
-                      className="ig-form-select"
-                    >
-                      <option value="daily">Daily</option>
-                      <option value="weekly">Weekly</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="custom">Custom Cron</option>
-                    </select>
-                  </div>
-                  <div className="ig-form-group">
-                    <label>Time Slot</label>
-                    <input
-                      type="time"
-                      value={strategyData.timeSlot}
-                      onChange={(e) => handleStrategyChange('timeSlot', e.target.value)}
-                      className="ig-form-input"
-                    />
-                  </div>
-                </div>
-                {strategyData.frequency === 'custom' && (
-                  <div className="ig-form-group">
-                    <label>Custom Cron Expression</label>
-                    <input
-                      type="text"
-                      value={strategyData.customCron}
-                      onChange={(e) => handleStrategyChange('customCron', e.target.value)}
-                      placeholder="0 9 * * * (daily at 9 AM)"
-                      className="ig-form-input"
-                    />
-                  </div>
-                )}
               </div>
+              <div className="ig-form-group">
+                <label>Frequency</label>
+                <select
+                  value={strategyData.frequency}
+                  onChange={(e) => handleStrategyChange('frequency', e.target.value)}
+                  className="ig-form-select"
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="custom">Custom Cron</option>
+                </select>
+              </div>
+              <div className="ig-form-group">
+                <label>Time Slot</label>
+                <input
+                  type="time"
+                  value={strategyData.timeSlot}
+                  onChange={(e) => handleStrategyChange('timeSlot', e.target.value)}
+                  className="ig-form-input"
+                />
+              </div>
+            </div>
+            {strategyData.frequency === 'custom' && (
+              <div className="ig-form-group">
+                <label>Custom Cron Expression</label>
+                <input
+                  type="text"
+                  value={strategyData.customCron}
+                  onChange={(e) => handleStrategyChange('customCron', e.target.value)}
+                  placeholder="0 9 * * * (daily at 9 AM)"
+                  className="ig-form-input"
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Calendar Preview */}
@@ -1309,8 +1420,8 @@ function IgBulkComposer({ selectedAccount, onClose }) {
                           title={`${post.scheduledTime} - ${(post.caption || '').substring(0, 30)}...`}
                         />
                       ))}
-            </div>
-          )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1342,8 +1453,8 @@ function IgBulkComposer({ selectedAccount, onClose }) {
                 className="ig-btn ig-btn-primary ig-btn-small"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="12" y1="5" x2="12" y2="19"/>
-                  <line x1="5" y1="12" x2="19" y2="12"/>
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                 Add Row
               </button>
@@ -1422,180 +1533,274 @@ function IgBulkComposer({ selectedAccount, onClose }) {
                     </div>
                     <div className="ig-grid-cell ig-caption-cell">
                       <div className="caption-container">
-                      <textarea
-                        value={row.caption}
-                        onChange={(e) => handleCellEdit(row.id, 'caption', e.target.value)}
-                        placeholder="Enter your Instagram post caption..."
-                        className="ig-caption-input"
-                        rows="3"
-                      />
+                        <textarea
+                          value={row.caption}
+                          onChange={(e) => handleCellEdit(row.id, 'caption', e.target.value)}
+                          placeholder="Enter your Instagram post caption..."
+                          className="ig-caption-input"
+                          rows="3"
+                        />
                         <button
                           onClick={() => handleExpandCaption(row.id)}
                           className="expand-btn"
                           title="Expand caption"
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M15 3h6v6"/>
-                            <path d="M9 21H3v-6"/>
-                            <path d="M21 3l-7 7"/>
-                            <path d="M3 21l7-7"/>
+                            <path d="M15 3h6v6" />
+                            <path d="M9 21H3v-6" />
+                            <path d="M21 3l-7 7" />
+                            <path d="M3 21l7-7" />
                           </svg>
                         </button>
-                    </div>
+                      </div>
                     </div>
                     <div className="ig-grid-cell ig-media-cell">
                       <div className="ig-media-options">
+                        {/* Show upload options when no media is uploaded yet */}
                         {!row.mediaPreview && !row.mediaFile && (!row.carouselImages || row.carouselImages.length === 0) ? (
-                        <div className="ig-media-option-group">
-                          {/* Photo/Reel Upload */}
-                          {(row.postType === 'photo' || row.postType === 'reel') && (
-                            <>
-                          <input
-                            type="file"
-                                accept={row.postType === 'photo' ? "image/*" : "video/*"}
-                            onChange={(e) => handleMediaUpload(row.id, e)}
-                            className="ig-media-input"
-                            id={`ig-media-upload-${row.id}`}
-                          />
-                          <label htmlFor={`ig-media-upload-${row.id}`} className="ig-media-option-btn upload-btn">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                              <polyline points="7,10 12,15 17,10"/>
-                              <line x1="12" y1="15" x2="12" y2="3"/>
-                            </svg>
-                                Upload {row.postType === 'photo' ? 'Image' : 'Video'}
-                          </label>
-                            </>
-                          )}
-                          
-                          {/* AI Generation for Photo */}
-                          {row.postType === 'photo' && (
-                          <button
-                            onClick={() => handleGenerateMedia(row.id)}
-                            className="ig-media-option-btn generate-btn"
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                            </svg>
-                            Generate
-                          </button>
-                          )}
-                          
-                          {/* AI Generation for Reel */}
-                          {row.postType === 'reel' && (
-                            <button
-                              onClick={() => handleGenerateMedia(row.id)}
-                              className="ig-media-option-btn generate-btn"
-                              disabled={true}
-                              title="AI video generation not yet available"
-                            >
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                              </svg>
-                              Generate (Coming Soon)
-                            </button>
-                          )}
-                          
-                          {/* Carousel Options */}
-                          {row.postType === 'carousel' && (
-                            <>
+                          <div className="ig-media-option-group">
+                            {/* Photo/Reel Upload */}
+                            {(row.postType === 'photo' || row.postType === 'reel') && (
+                              <>
+                                <input
+                                  type="file"
+                                  accept={row.postType === 'photo' ? "image/*" : "video/*"}
+                                  onChange={(e) => handleMediaUpload(row.id, e)}
+                                  className="ig-media-input"
+                                  id={`ig-media-upload-${row.id}`}
+                                />
+                                <label htmlFor={`ig-media-upload-${row.id}`} className="ig-media-option-btn upload-btn">
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7,10 12,15 17,10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                  </svg>
+                                  Upload {row.postType === 'photo' ? 'Image' : 'Video'}
+                                </label>
+                              </>
+                            )}
+
+                            {/* Disabled Thumbnail Upload for Reels (Video Required First) */}
+                            {row.postType === 'reel' && (
+                              <div className="ig-media-option-btn upload-btn thumbnail-btn disabled" title="Please upload a video first">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                  <circle cx="8.5" cy="8.5" r="1.5" />
+                                  <polyline points="21,15 16,10 5,21" />
+                                </svg>
+                                Upload Thumbnail (Video Required First)
+                              </div>
+                            )}
+
+                            {/* AI Generation for Photo */}
+                            {row.postType === 'photo' && (
                               <button
-                                onClick={() => handleGenerateCarousel(row.id)}
+                                onClick={() => handleGenerateMedia(row.id)}
                                 className="ig-media-option-btn generate-btn"
                               >
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                                 </svg>
-                                Generate {row.carouselImageCount || 3} Images
+                                Generate
                               </button>
-                              <input
-                                key={`ig-carousel-upload-${row.id}`}
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                ref={el => carouselInputRefs.current[row.id] = el}
-                                onChange={(e) => handleCarouselUpload(row.id, e)}
-                                className="ig-media-input"
-                                id={`ig-carousel-upload-${row.id}`}
-                              />
-                              <label htmlFor={`ig-carousel-upload-${row.id}`} className="ig-media-option-btn upload-btn">
+                            )}
+
+                            {/* AI Generation for Reel */}
+                            {row.postType === 'reel' && (
+                              <button
+                                onClick={() => handleGenerateMedia(row.id)}
+                                className="ig-media-option-btn generate-btn"
+                                disabled={true}
+                                title="AI video generation not yet available"
+                              >
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                  <polyline points="7,10 12,15 17,10"/>
-                                  <line x1="12" y1="15" x2="12" y2="3"/>
+                                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                                 </svg>
-                                Upload {row.carouselImageCount || 3} Images
-                              </label>
-                            </>
-                          )}
-                        </div>
-                        ) : (
-                          <div className="ig-media-preview">
-                            {/* Carousel Preview */}
-                            {row.postType === 'carousel' && row.carouselImages && row.carouselImages.length > 0 ? (
-                              <div className="ig-carousel-preview">
-                                <div className="ig-carousel-grid">
-                                  {row.carouselImages.slice(0, row.carouselImageCount || 3).map((url, index) => (
-                                    <div key={index} className="ig-carousel-item">
-                                      <img src={url} alt={`Carousel ${index + 1}`} />
-                                      <span className="ig-carousel-number">{index + 1}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="ig-carousel-info">
-                                  <div className="ig-carousel-status">
-                                    {row.carouselImages.length} / {row.carouselImageCount || 3} images
-                                    {row.carouselImages.length < 3 && (
-                                      <span className="ig-carousel-warning">⚠️ Need at least 3 images</span>
-                                    )}
-                                    {row.carouselImages.length >= 3 && (
-                                      <span className="ig-carousel-success">✅ Ready</span>
-                                    )}
-                                  </div>
-                                  <button
-                                    onClick={() => handleRemoveCarouselImages(row.id)}
-                                    className="ig-btn ig-btn-danger ig-btn-small"
-                                    disabled={row.carouselImages.length === 0}
-                                    title="Remove all carousel images"
-                                  >
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                      <line x1="18" y1="6" x2="6" y2="18"/>
-                                      <line x1="6" y1="6" x2="18" y2="18"/>
-                                    </svg>
-                                    Remove All
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              /* Single Media Preview */
+                                Generate (Coming Soon)
+                              </button>
+                            )}
+
+                            {/* Carousel Options */}
+                            {row.postType === 'carousel' && (
                               <>
-                            {row.mediaFile?.type?.startsWith('image/') ? (
-                              <img src={row.mediaPreview} alt="Preview" />
-                            ) : (
-                              <video src={row.mediaPreview} controls />
-                                )}
+                                <button
+                                  onClick={() => handleGenerateCarousel(row.id)}
+                                  className="ig-media-option-btn generate-btn"
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                  </svg>
+                                  Generate {row.carouselImageCount || 3} Images
+                                </button>
+                                <input
+                                  key={`ig-carousel-upload-${row.id}`}
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  ref={el => carouselInputRefs.current[row.id] = el}
+                                  onChange={(e) => handleCarouselUpload(row.id, e)}
+                                  className="ig-media-input"
+                                  id={`ig-carousel-upload-${row.id}`}
+                                />
+                                <label htmlFor={`ig-carousel-upload-${row.id}`} className="ig-media-option-btn upload-btn">
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7,10 12,15 17,10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                  </svg>
+                                  Upload {row.carouselImageCount || 3} Images
+                                </label>
                               </>
                             )}
-                            <button
-                              onClick={() => handleViewMedia(row.id)}
-                              className="view-media-btn"
-                              title="View media"
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                                <circle cx="12" cy="12" r="3"/>
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => handleRemoveMedia(row.id)}
-                              className="remove-media-btn"
-                              title="Remove media"
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <line x1="18" y1="6" x2="6" y2="18"/>
-                                <line x1="6" y1="6" x2="18" y2="18"/>
-                              </svg>
-                            </button>
+                          </div>
+                        ) : (
+                          /* Show media preview and additional options after upload */
+                          <div className="ig-media-preview-container">
+                            {/* Thumbnail Upload for Reels - ONLY show after video is uploaded */}
+                            {row.postType === 'reel' && (row.mediaPreview || row.mediaFile) && (
+                              <div className="ig-reel-thumbnail-upload-section">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => handleThumbnailUpload(row.id, e)}
+                                  className="ig-media-input"
+                                  id={`ig-thumbnail-upload-${row.id}`}
+                                  disabled={row.thumbnailUploading}
+                                />
+                                <label
+                                  htmlFor={`ig-thumbnail-upload-${row.id}`}
+                                  className={`ig-media-option-btn upload-btn thumbnail-btn ${row.thumbnailUploading ? 'uploading' : ''}`}
+                                >
+                                  {row.thumbnailUploading ? (
+                                    <>
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="spinning">
+                                        <path d="M21 12a9 9 0 11-6.219-8.56" />
+                                      </svg>
+                                      Uploading...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                        <circle cx="8.5" cy="8.5" r="1.5" />
+                                        <polyline points="21,15 16,10 5,21" />
+                                      </svg>
+                                      {row.thumbnailPreview ? 'Change Thumbnail' : 'Upload Thumbnail (Optional)'}
+                                    </>
+                                  )}
+                                </label>
+                              </div>
+                            )}
+                            
+                            {/* Media Preview */}
+                            <div className="ig-media-preview">
+                              {/* Carousel Preview */}
+                              {row.postType === 'carousel' && row.carouselImages && row.carouselImages.length > 0 ? (
+                                <div className="ig-carousel-preview">
+                                  <div className="ig-carousel-grid">
+                                    {row.carouselImages.slice(0, row.carouselImageCount || 3).map((url, index) => (
+                                      <div key={index} className="ig-carousel-item">
+                                        <img src={url} alt={`Carousel ${index + 1}`} />
+                                        <span className="ig-carousel-number">{index + 1}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="ig-carousel-info">
+                                    <div className="ig-carousel-status">
+                                      {row.carouselImages.length} / {row.carouselImageCount || 3} images
+                                      {row.carouselImages.length < 3 && (
+                                        <span className="ig-carousel-warning">⚠️ Need at least 3 images</span>
+                                      )}
+                                      {row.carouselImages.length >= 3 && (
+                                        <span className="ig-carousel-success">✅ Ready</span>
+                                      )}
+                                    </div>
+                                    <button
+                                      onClick={() => handleRemoveCarouselImages(row.id)}
+                                      className="ig-btn ig-btn-danger ig-btn-small"
+                                      disabled={row.carouselImages.length === 0}
+                                      title="Remove all carousel images"
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <line x1="18" y1="6" x2="6" y2="18" />
+                                        <line x1="6" y1="6" x2="18" y2="18" />
+                                      </svg>
+                                      Remove All
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                /* Single Media Preview */
+                                <>
+                                  {row.postType === 'reel' ? (
+                                    <div className="ig-reel-preview">
+                                      <div className="ig-reel-video">
+                                        <video src={row.mediaPreview} controls />
+                                        <span className="ig-reel-label">Reel Video</span>
+                                        <div className="ig-reel-video-actions">
+                                          <button
+                                            onClick={() => handleViewMedia(row.id)}
+                                            className="ig-reel-video-view"
+                                            title="View video"
+                                          >
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                              <circle cx="12" cy="12" r="3" />
+                                            </svg>
+                                          </button>
+                                          <button
+                                            onClick={() => handleRemoveMedia(row.id)}
+                                            className="ig-reel-video-close"
+                                            title="Remove video"
+                                          >
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                              <line x1="18" y1="6" x2="6" y2="18" />
+                                              <line x1="6" y1="6" x2="18" y2="18" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      </div>
+                                      {row.thumbnailPreview && (
+                                        <div className={`ig-reel-thumbnail ${row.thumbnailUrl ? 'uploaded' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                          <img src={row.thumbnailPreview} alt="Thumbnail" />
+                                          <label htmlFor={`ig-thumbnail-upload-${row.id}`} style={{ cursor: 'pointer', marginLeft: '0.5rem', display: 'flex', alignItems: 'center' }} title="Change Thumbnail">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                              <path d="M12 20h9" />
+                                              <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                                            </svg>
+                                          </label>
+                                          <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => handleThumbnailUpload(row.id, e)}
+                                            className="ig-media-input"
+                                            id={`ig-thumbnail-upload-${row.id}`}
+                                            disabled={row.thumbnailUploading}
+                                            style={{ display: 'none' }}
+                                          />
+                                          <button
+                                            onClick={() => handleRemoveThumbnail(row.id)}
+                                            className="ig-reel-thumbnail-close"
+                                            title="Remove thumbnail"
+                                          >
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                              <line x1="18" y1="6" x2="6" y2="18" />
+                                              <line x1="6" y1="6" x2="18" y2="18" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : row.mediaFile?.type?.startsWith('image/') ? (
+                                    <img src={row.mediaPreview} alt="Preview" />
+                                  ) : (
+                                    <video src={row.mediaPreview} controls />
+                                  )}
+                                </>
+                              )}
+                            
+
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1648,12 +1853,12 @@ function IgBulkComposer({ selectedAccount, onClose }) {
               <span className="ig-stat-label">With Media:</span>
               <span className="ig-stat-value">{composerRows.filter(row => row.mediaFile || row.mediaPreview).length}</span>
             </div>
-              </div>
+          </div>
           {isScheduling && (
             <div className="ig-schedule-progress">
               <div className="ig-progress-bar">
-                <div 
-                  className="ig-progress-fill" 
+                <div
+                  className="ig-progress-fill"
                   style={{ width: `${scheduleProgress}%` }}
                 />
               </div>
@@ -1669,15 +1874,15 @@ function IgBulkComposer({ selectedAccount, onClose }) {
               {isScheduling ? (
                 <>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                    <path d="M21 12a9 9 0 11-6.219-8.56" />
                   </svg>
                   Scheduling...
                 </>
               ) : (
                 <>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <polyline points="12,6 12,12 16,14"/>
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12,6 12,12 16,14" />
                   </svg>
                   Schedule Ready Posts ({composerRows.filter(row => row.status === 'ready').length})
                 </>

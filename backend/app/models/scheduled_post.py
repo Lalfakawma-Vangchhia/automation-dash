@@ -31,6 +31,7 @@ class ScheduledPost(Base):
     image_url = Column(String, nullable=True) # Cloudinary image URL for single photo posts
     media_urls = Column(JSON, nullable=True) # Array of media URLs for carousel posts
     video_url = Column(String, nullable=True) # Cloudinary video URL for reel posts
+    reel_thumbnail_url = Column(String, nullable=True) # Optional thumbnail/cover image URL for reel posts
     post_type = Column(Enum(PostType, name="posttype_new"), nullable=False, default=PostType.PHOTO) # NEW: post type field
     
     # Instagram post ID (media ID) after posting

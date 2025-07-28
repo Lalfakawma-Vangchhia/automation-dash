@@ -728,9 +728,14 @@ const InstagramPage = () => {
         const videoUrl = res.url || res.data?.url;
         const filename = res.filename || res.data?.filename;
         setReelUrl(videoUrl);
-        setReelFilename(filename || ''); // Store the filename for file-based posting
+        setReelFilename(filename || '');
         // eslint-disable-next-line no-undef
         setReelFile(file);
+        console.log('🔍 DEBUG: Video uploaded successfully:', {
+          videoUrl,
+          filename,
+          res
+        });
         setMessage('Video uploaded successfully!');
       } else if (res && res.data && res.data.url) {
         // Alternative response structure
@@ -785,7 +790,7 @@ const InstagramPage = () => {
     }
     setMessage('Uploading thumbnail image...');
     try {
-      const res = await apiClient.uploadImageToCloudinary(file);
+      const res = await apiClient.uploadThumbnailToCloudinary(file);
       if (res && res.success && (res.url || res.data?.url)) {
         const imageUrl = res.url || res.data?.url;
         const filename = res.filename || res.data?.filename;
@@ -793,6 +798,11 @@ const InstagramPage = () => {
         setReelThumbnailFilename(filename || '');
         // eslint-disable-next-line no-undef
         setReelThumbnailFile(file);
+        console.log('🔍 DEBUG: Thumbnail uploaded successfully:', {
+          imageUrl,
+          filename,
+          res
+        });
         setMessage('Thumbnail uploaded successfully!');
       } else {
         throw new Error(res?.error || res?.message || 'Thumbnail upload failed');
@@ -1222,6 +1232,12 @@ const InstagramPage = () => {
         if ('media_filename' in options) delete options.media_filename;
         if ('image_url' in options) delete options.image_url;
         console.log('🔍 DEBUG: Reel post options:', options);
+        console.log('🔍 DEBUG: Thumbnail state values:', {
+          reelThumbnailUrl,
+          reelThumbnailFilename,
+          hasThumbnailUrl: reelThumbnailUrl && reelThumbnailUrl.trim(),
+          hasThumbnailFilename: reelThumbnailFilename && reelThumbnailFilename.trim()
+        });
       }
 
       // Remove any empty string values from options to avoid backend validation issues
@@ -1252,6 +1268,13 @@ const InstagramPage = () => {
         originalOptions: options,
         reelUrl: reelUrl,
         reelFilename: reelFilename
+      });
+      console.log('🔍 DEBUG: Final thumbnail state before API call:', {
+        reelThumbnailUrl,
+        reelThumbnailFilename,
+        hasThumbnailUrl: reelThumbnailUrl && reelThumbnailUrl.trim(),
+        hasThumbnailFilename: reelThumbnailFilename && reelThumbnailFilename.trim(),
+        cleanOptionsHasThumbnail: cleanOptions.thumbnail_url || cleanOptions.thumbnail_filename
       });
       const response = await apiClient.createUnifiedInstagramPost(selectedAccount.platform_user_id, cleanOptions);
       
@@ -2324,7 +2347,13 @@ const InstagramPage = () => {
                   </div>
                   <div className="form-group">
                     <label>Upload Reel Thumbnail (optional):</label>
-                    {reelThumbnailUrl && <img src={reelThumbnailUrl} alt="Reel Thumbnail Preview" style={{maxWidth: 120, marginTop: 8}} />}
+                    <input type="file" accept="image/png,image/jpeg,image/jpg" onChange={handleReelThumbnailChange} disabled={!reelUrl} />
+                    {reelThumbnailUrl && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                        <img src={reelThumbnailUrl} alt="Reel Thumbnail Preview" style={{ maxWidth: 120, borderRadius: 8, border: '1px solid #eee' }} />
+                        <button type="button" onClick={() => { setReelThumbnailUrl(''); setReelThumbnailFilename(''); setReelThumbnailFile(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e53e3e', fontSize: 18 }} title="Remove thumbnail">&times;</button>
+                      </div>
+                    )}
                   </div>
                   <div className="form-group">
                     <label>Caption</label>

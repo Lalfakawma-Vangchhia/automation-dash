@@ -1,4 +1,4 @@
-from pydantic import BaseModel, HttpUrl, Field
+from pydantic import BaseModel, HttpUrl, Field, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from app.models.post import PostStatus, PostType
@@ -237,3 +237,39 @@ class LinkedInPostRequest(BaseModel):
     content: str
     post_type: str = "post-auto"
     image_url: Optional[str] = None 
+
+
+class UnifiedInstagramPostRequest(BaseModel):
+    """Unified request model for creating Instagram posts with various options."""
+    instagram_user_id: str = Field(..., description="Instagram user ID")
+    caption: Optional[str] = Field(None, description="Text caption for the post")
+    content_prompt: Optional[str] = Field(None, description="Prompt for AI text generation")
+    image_prompt: Optional[str] = Field(None, description="Prompt for AI image generation")
+    image_url: Optional[str] = Field(None, description="URL of existing image to use")
+    video_url: Optional[str] = Field(None, description="URL of existing video to use (base64 data URL)")
+    video_filename: Optional[str] = Field(None, description="Filename of existing video")
+    media_file: Optional[str] = Field(None, description="Base64 encoded media file (for video uploads)")
+    media_filename: Optional[str] = Field(None, description="Media filename (for video uploads)")
+    post_type: str = Field(default="feed", description="Type of post for sizing")
+    use_ai_text: bool = Field(default=False, description="Whether to generate text using AI")
+    use_ai_image: bool = Field(default=False, description="Whether to generate image using AI")
+    media_type: str = Field(default="image", description="Type of media (image, video, carousel)")
+    thumbnail_url: Optional[str] = None
+    thumbnail_filename: Optional[str] = None
+    thumbnail_file: Optional[str] = None
+    @model_validator(mode='after')
+    def validate_content_requirements(self):
+        """Ensure at least one content source is provided."""
+        has_content = any([
+            self.caption and self.caption.strip(),
+            self.content_prompt and self.content_prompt.strip(),
+            self.image_url and self.image_url.strip(),
+            self.image_prompt and self.image_prompt.strip(),
+            self.video_url and self.video_url.strip(),
+            self.video_filename and self.video_filename.strip(),
+            self.media_file and self.media_file.strip(),
+            self.media_filename and self.media_filename.strip()
+        ])
+        if not has_content:
+            raise ValueError("At least one of caption, content_prompt, image_url, image_prompt, video_url, video_filename, media_file, or media_filename must be provided")
+        return self 

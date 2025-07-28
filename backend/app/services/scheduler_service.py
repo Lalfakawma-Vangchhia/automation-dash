@@ -253,8 +253,26 @@ class SchedulerService:
                         db.commit()
                         return
                 
+                # Handle thumbnail for reels
+                if scheduled_post.reel_thumbnail_url and self.is_base64_image(scheduled_post.reel_thumbnail_url):
+                    logger.info(f"☁️ Converting base64 thumbnail to Cloudinary for reel post {scheduled_post.id}")
+                    try:
+                        base64_data = self.extract_base64(scheduled_post.reel_thumbnail_url)
+                        thumbnail_data = base64.b64decode(base64_data)
+                        upload_result = cloudinary_service.upload_thumbnail_with_instagram_transform(thumbnail_data)
+                        if upload_result["success"]:
+                            scheduled_post.reel_thumbnail_url = upload_result["url"]
+                            db.commit()
+                            logger.info(f"✅ Converted and updated thumbnail to Cloudinary: {scheduled_post.reel_thumbnail_url}")
+                        else:
+                            logger.warning(f"⚠️ Cloudinary thumbnail upload failed: {upload_result.get('error')}")
+                            # Continue without thumbnail rather than failing the entire post
+                    except Exception as e:
+                        logger.warning(f"⚠️ Error converting base64 thumbnail to Cloudinary: {e}")
+                        # Continue without thumbnail rather than failing the entire post
+                
                 has_media = bool(scheduled_post.video_url)
-                logger.info(f"🎬 Reel post - Video URL: {scheduled_post.video_url}")
+                logger.info(f"🎬 Reel post - Video URL: {scheduled_post.video_url}, Thumbnail URL: {scheduled_post.reel_thumbnail_url}")
             
             if not has_media:
                 logger.error(f"❌ Scheduled post {scheduled_post.id} missing required media for {post_type} post. Marking as failed.")
@@ -310,7 +328,8 @@ class SchedulerService:
                         page_access_token=page_access_token,
                         caption=scheduled_post.prompt,
                         video_url=scheduled_post.video_url,
-                        is_reel=True
+                        is_reel=True,
+                        thumbnail_url=scheduled_post.reel_thumbnail_url  # Add thumbnail URL for reels
                     )
                 else:
                     logger.error(f"❌ Unknown post type: {post_type}")

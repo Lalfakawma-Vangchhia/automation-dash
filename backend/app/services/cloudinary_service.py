@@ -68,4 +68,31 @@ class CloudinaryService:
             logger.error(f"Cloudinary video upload failed: {e}")
             return {"success": False, "error": str(e)}
 
+    def upload_thumbnail_with_instagram_transform(self, image_data) -> Dict:
+        """Upload a thumbnail image to Cloudinary with Instagram reel cover image requirements."""
+        if not self.is_configured():
+            return {"success": False, "error": "Cloudinary not configured"}
+        try:
+            # Instagram reel cover image requirements:
+            # - Aspect ratio: 9:16 (vertical)
+            # - Minimum resolution: 420x654 pixels
+            # - Recommended resolution: 1080x1920 pixels
+            # - Format: JPG or PNG
+            result = cloudinary.uploader.upload(
+                image_data,
+                transformation=[
+                    {"width": 1080, "height": 1920, "crop": "fill", "gravity": "auto"},
+                    {"quality": "auto:good"},
+                    {"format": "jpg"}
+                ],
+                folder="instagram/thumbnails",
+                format="jpg",
+                quality="auto:good"
+            )
+            logger.info(f"Successfully uploaded thumbnail to Cloudinary: {result['secure_url']}")
+            return {"success": True, "url": result["secure_url"]}
+        except Exception as e:
+            logger.error(f"Cloudinary thumbnail upload failed: {e}")
+            return {"success": False, "error": str(e)}
+
 cloudinary_service = CloudinaryService() 
