@@ -187,8 +187,3 @@ token.json
 venv/
 
 
-# Local-only feature files
-backend/app/models/scheduled_post.py
-backend/app/services/scheduler_service.py
-frontend/src/components/igBulkComposer.css
-frontend/src/components/igBulkComposer.js
