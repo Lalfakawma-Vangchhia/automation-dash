@@ -12,6 +12,7 @@ import os
 import signal
 import sys
 from pathlib import Path
+from app.api.notification_ws import router as notification_ws_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -163,6 +164,7 @@ app.include_router(ai.router, prefix="/api")
 app.include_router(google_drive.router)
 app.include_router(webhook.router, prefix="/api")
 app.include_router(google_oauth.router, prefix="/api")
+app.include_router(notification_ws_router)
 
 
 # Error handlers

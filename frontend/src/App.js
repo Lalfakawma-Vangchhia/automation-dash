@@ -1,9 +1,10 @@
-import React, { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import React, { Suspense, lazy, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import './App.css';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Login from './components/Login';
+import notificationService from './services/notificationService';
 
 // Lazy load components for better performance
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -79,6 +80,38 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// Component to maintain WebSocket connection across route changes
+function WebSocketManager() {
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Ensure WebSocket connection is maintained on route changes
+      console.log('🔄 Route changed, ensuring WebSocket connection');
+      setTimeout(() => {
+        notificationService.ensureConnection();
+      }, 500); // Small delay to ensure page has loaded
+    }
+  }, [location.pathname, isAuthenticated]);
+
+  // Also check connection status periodically
+  useEffect(() => {
+    if (isAuthenticated) {
+      const interval = setInterval(() => {
+        if (!notificationService.isConnected()) {
+          console.log('🔄 WebSocket disconnected, attempting to reconnect');
+          notificationService.ensureConnection();
+        }
+      }, 5000); // Check every 5 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
+
+  return null; // This component doesn't render anything
+}
+
 function AppContent() {
   const { isAuthenticated, loading } = useAuth();
 
@@ -88,6 +121,7 @@ function AppContent() {
 
   return (
     <ErrorBoundary>
+      {isAuthenticated && <WebSocketManager />}
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<Login />} />

@@ -1691,3 +1691,35 @@ a action buttons container */
   transform: translateY(-2px) !important;
   transition: all 0.3s ease !important;
 }
+
+.ig-ws-toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  background: #222;
+  color: #fff;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 1rem;
+  max-width: 400px;
+}
+.ig-toast-dismiss {
+  background: none;
+  border: none;
+  color: #fff;
+  font-weight: bold;
+  margin-left: 1rem;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.ig-toast-dismiss:hover {
+  background: #444;
+}

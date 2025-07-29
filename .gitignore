@@ -185,3 +185,10 @@ token.json
 /backend/requirements.txt
 /backend/venv
 venv/
+
+.gitignore.local
+*.pyc
+vv/
+src/
+backend/test_*.py
+backend/send_test_notification.py

@@ -16,13 +16,18 @@ import pytz
 from pytz import timezone, UTC
 import base64
 import io
+from app.api.notification_ws import active_connections
+import json
 
 logger = logging.getLogger(__name__)
+
+# Track which posts have already been notified to prevent duplicates
+_notified_posts = set()
 
 class SchedulerService:
     def __init__(self):
         self.running = False
-        self.check_interval = 60  # Check every 60 seconds
+        self.check_interval = 30  # Check every 30 seconds for better notification accuracy
     
     def is_base64_image(self, data):
         return data and isinstance(data, str) and data.startswith("data:image/")
@@ -31,6 +36,163 @@ class SchedulerService:
         if "," in data:
             return data.split(",", 1)[1]
         return data
+
+    async def notify_upcoming_scheduled_posts(self):
+        """Notify users 10 minutes before their scheduled post is published via WebSocket"""
+        db: Session = None
+        try:
+            db = next(get_db())
+            
+            # Use consistent timezone logic - UTC for all comparisons
+            now_utc = datetime.utcnow()
+            ten_min_later = now_utc + timedelta(minutes=10)
+            
+            logger.info(f"🔔 Checking for notifications at {now_utc.strftime('%H:%M:%S')} UTC")
+            logger.info(f"🔔 Looking for posts scheduled around {ten_min_later.strftime('%H:%M:%S')} UTC")
+            
+            # Find posts scheduled for 10 minutes from now (±5 minute window for better coverage)
+            # Convert UTC times to timezone-aware for comparison
+            from pytz import UTC
+            now_utc_aware = now_utc.replace(tzinfo=UTC)
+            ten_min_later_aware = ten_min_later.replace(tzinfo=UTC)
+            
+            # Use a wider window to catch timezone-aware posts
+            upcoming_posts = db.query(ScheduledPost).filter(
+                ScheduledPost.status == "scheduled",
+                ScheduledPost.scheduled_datetime >= ten_min_later_aware - timedelta(minutes=5),
+                ScheduledPost.scheduled_datetime <= ten_min_later_aware + timedelta(minutes=5),
+                ScheduledPost.is_active == True
+            ).all()
+            
+            logger.info(f"🔔 Found {len(upcoming_posts)} posts for notification")
+            
+            for post in upcoming_posts:
+                try:
+                    # Calculate actual minutes until posting - handle timezone-aware datetime
+                    if post.scheduled_datetime.tzinfo is not None:
+                        # Convert timezone-aware scheduled_datetime to UTC for comparison
+                        scheduled_utc = post.scheduled_datetime.astimezone(UTC)
+                        time_diff = scheduled_utc - now_utc_aware
+                    else:
+                        # Handle naive datetime (assume UTC)
+                        time_diff = post.scheduled_datetime - now_utc
+                    
+                    minutes_until = int(time_diff.total_seconds() / 60)
+                    
+                    logger.info(f"🔔 Post {post.id} scheduled for {post.scheduled_datetime}, {minutes_until} minutes from now")
+                    if post.scheduled_datetime.tzinfo is not None:
+                        logger.info(f"🔔 Post {post.id} - scheduled_utc: {scheduled_utc}, now_utc: {now_utc_aware}")
+                    else:
+                        logger.info(f"🔔 Post {post.id} - naive datetime, treating as UTC")
+                    
+                    # Check if we've already notified for this post to prevent duplicates
+                    notification_key = f"{post.id}_{minutes_until}"
+                    
+                    # Notify if it's between 8-12 minutes (10-minute advance notification)
+                    if 8 <= minutes_until <= 12:
+                        # Only send notification once per post (when it first enters the 8-12 minute window)
+                        if post.id not in _notified_posts:
+                            _notified_posts.add(post.id)
+                            
+                            message = {
+                                "type": "scheduled_post_reminder",
+                                "post_id": post.id,
+                                "scheduled_time": post.scheduled_datetime.isoformat() if post.scheduled_datetime else None,
+                                "minutes_until": minutes_until,
+                                "prompt": post.prompt[:100] + "..." if len(post.prompt) > 100 else post.prompt,
+                                "post_type": post.post_type.value if hasattr(post.post_type, 'value') else str(post.post_type),
+                                "message": f"Your scheduled post is set to be published in {minutes_until} minutes. If you need to make any changes, please do so now."
+                            }
+                            
+                            user_id = post.user_id
+                            logger.info(f"🔔 Sending ONE-TIME notification to user {user_id} for post {post.id} ({minutes_until} minutes until posting)")
+                            
+                            if user_id in active_connections:
+                                sent_count = 0
+                                for ws in active_connections[user_id][:]:  # Create a copy to avoid modification during iteration
+                                    try:
+                                        await ws.send_text(json.dumps(message))
+                                        sent_count += 1
+                                        logger.info(f"✅ Notification sent to user {user_id} via WebSocket")
+                                    except Exception as ws_error:
+                                        logger.warning(f"⚠️ Failed to send notification via WebSocket: {ws_error}")
+                                        # Remove broken connection
+                                        try:
+                                            active_connections[user_id].remove(ws)
+                                        except ValueError:
+                                            pass
+                                
+                                if sent_count == 0:
+                                    logger.warning(f"⚠️ No active WebSocket connections for user {user_id}")
+                                else:
+                                    logger.info(f"✅ Sent ONE-TIME notification to {sent_count} WebSocket connections for user {user_id}")
+                            else:
+                                logger.warning(f"⚠️ User {user_id} has no active WebSocket connections")
+                        else:
+                            logger.debug(f"🔔 Post {post.id} already notified, skipping duplicate notification")
+                    
+                    # Clean up notified posts that are no longer in the notification window or have been executed
+                    elif minutes_until < 8 or post.status != "scheduled":
+                        if post.id in _notified_posts:
+                            _notified_posts.discard(post.id)
+                            logger.debug(f"🧹 Cleaned up notification tracking for post {post.id}")
+                    else:
+                        logger.debug(f"🔔 Post {post.id} is {minutes_until} minutes away, not in notification window (8-12 minutes)")
+                        
+                except Exception as post_error:
+                    logger.error(f"❌ Error processing notification for post {post.id}: {post_error}")
+                    
+        except Exception as e:
+            logger.error(f"❌ Error in notify_upcoming_scheduled_posts: {e}")
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        finally:
+            if db:
+                try:
+                    db.close()
+                except Exception as close_error:
+                    logger.error(f"❌ Error closing database connection: {close_error}")
+
+    async def send_post_status_notification(self, scheduled_post: ScheduledPost, status: str, message: str):
+        """Send post execution status notification to user"""
+        try:
+            notification_message = {
+                "type": "scheduled_post_status",
+                "post_id": scheduled_post.id,
+                "status": status,
+                "message": message,
+                "prompt": scheduled_post.prompt[:100] + "..." if len(scheduled_post.prompt) > 100 else scheduled_post.prompt,
+                "post_type": scheduled_post.post_type.value if hasattr(scheduled_post.post_type, 'value') else str(scheduled_post.post_type),
+                "timestamp": datetime.utcnow().isoformat(),
+                "instagram_post_id": scheduled_post.post_id if status == "success" else None
+            }
+            
+            user_id = scheduled_post.user_id
+            logger.info(f"📱 Sending {status} notification to user {user_id} for post {scheduled_post.id}")
+            
+            if user_id in active_connections:
+                sent_count = 0
+                for ws in active_connections[user_id][:]:
+                    try:
+                        await ws.send_text(json.dumps(notification_message))
+                        sent_count += 1
+                        logger.info(f"✅ Status notification sent to user {user_id} via WebSocket")
+                    except Exception as ws_error:
+                        logger.warning(f"⚠️ Failed to send status notification via WebSocket: {ws_error}")
+                        try:
+                            active_connections[user_id].remove(ws)
+                        except ValueError:
+                            pass
+                
+                if sent_count > 0:
+                    logger.info(f"✅ Sent {status} notification to {sent_count} WebSocket connections for user {user_id}")
+                else:
+                    logger.warning(f"⚠️ No active WebSocket connections for user {user_id}")
+            else:
+                logger.warning(f"⚠️ User {user_id} has no active WebSocket connections for status notification")
+                
+        except Exception as e:
+            logger.error(f"❌ Error sending post status notification: {e}")
 
     async def start(self):
         """Start the scheduler service"""
@@ -43,11 +205,17 @@ class SchedulerService:
         
         while self.running:
             try:
+                current_time = datetime.utcnow()
+                logger.info(f"🕐 Scheduler cycle at {current_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+                
+                await self.notify_upcoming_scheduled_posts()
                 await self.process_scheduled_posts()
                 await self.process_auto_replies()
                 await asyncio.sleep(self.check_interval)
             except Exception as e:
                 logger.error(f"Error in scheduler loop: {e}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 await asyncio.sleep(self.check_interval)
     
     def stop(self):
@@ -342,12 +510,22 @@ class SchedulerService:
                     # Save the Instagram post/media ID
                     scheduled_post.post_id = result.get("post_id") or result.get("creation_id")
                     logger.info(f"✅ Successfully posted scheduled {post_type} to Instagram: {scheduled_post.id}, post_id: {scheduled_post.post_id}")
+                    
+                    # Send success notification
+                    await self.send_post_status_notification(scheduled_post, "success", "Your scheduled post has been successfully published to Instagram!")
                 else:
                     scheduled_post.status = "failed"
-                    logger.error(f"❌ Failed to post {post_type} to Instagram: {result.get('error')}")
+                    error_msg = result.get('error', 'Unknown error') if result else 'No response from Instagram API'
+                    logger.error(f"❌ Failed to post {post_type} to Instagram: {error_msg}")
+                    
+                    # Send failure notification
+                    await self.send_post_status_notification(scheduled_post, "failed", f"Failed to publish your scheduled post: {error_msg}")
             except Exception as ig_error:
                 logger.error(f"Instagram posting error: {ig_error}")
                 scheduled_post.status = "failed"
+                
+                # Send failure notification for exceptions
+                await self.send_post_status_notification(scheduled_post, "failed", f"Failed to publish your scheduled post: {str(ig_error)}")
             
             scheduled_post.is_active = False
             scheduled_post.last_executed = datetime.utcnow()

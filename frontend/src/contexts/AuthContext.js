@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import apiClient from '../services/apiClient';
+import notificationService from '../services/notificationService';
 
 const AuthContext = createContext();
 
@@ -26,6 +27,10 @@ export const AuthProvider = ({ children }) => {
           const userData = await apiClient.getCurrentUser();
           setUser(userData);
           setIsAuthenticated(true);
+          
+          // Connect to WebSocket notification service
+          console.log('🔔 Connecting to notification service with existing token');
+          notificationService.connect(token);
         }
       } catch (error) {
         console.error('Auth check failed:', error);
@@ -34,6 +39,8 @@ export const AuthProvider = ({ children }) => {
         apiClient.setToken(null);
         setUser(null);
         setIsAuthenticated(false);
+        // Disconnect WebSocket on auth failure
+        notificationService.disconnect();
       } finally {
         setLoading(false);
       }
@@ -70,6 +77,8 @@ export const AuthProvider = ({ children }) => {
       await apiClient.logout();
       setUser(null);
       setIsAuthenticated(false);
+      // Disconnect WebSocket on logout
+      notificationService.disconnect();
     } catch (error) {
       console.error('Logout failed:', error);
     }

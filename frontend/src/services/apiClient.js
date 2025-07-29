@@ -8,6 +8,24 @@ class ApiClient {
     
     this.baseURL = process.env.REACT_APP_API_URL || defaultURL;
     this.token = localStorage.getItem('authToken');
+    
+    // Auto-connect to WebSocket if user is already logged in
+    if (this.token) {
+      this.connectToNotifications();
+    }
+  }
+
+  // Connect to WebSocket notifications
+  async connectToNotifications() {
+    if (!this.token) return;
+    
+    try {
+      const notificationService = (await import('./notificationService')).default;
+      notificationService.connect(this.token);
+      console.log('🔔 Auto-connected to notification service');
+    } catch (error) {
+      console.error('❌ Failed to auto-connect to notification service:', error);
+    }
   }
 
   setToken(token) {
@@ -195,6 +213,15 @@ class ApiClient {
     
     if (response.access_token) {
       this.setToken(response.access_token);
+      
+      // Connect to WebSocket for real-time notifications
+      try {
+        const notificationService = (await import('./notificationService')).default;
+        notificationService.connect(response.access_token);
+        console.log('🔔 Connected to notification service');
+      } catch (error) {
+        console.error('❌ Failed to connect to notification service:', error);
+      }
     }
     
     return response;
@@ -205,6 +232,15 @@ class ApiClient {
   }
 
   async logout() {
+    // Disconnect from WebSocket notifications
+    try {
+      const notificationService = (await import('./notificationService')).default;
+      notificationService.disconnect();
+      console.log('🔔 Disconnected from notification service');
+    } catch (error) {
+      console.error('❌ Failed to disconnect from notification service:', error);
+    }
+    
     this.setToken(null);
   }
 
@@ -910,6 +946,18 @@ class ApiClient {
   async getScheduledPosts() {
     // Adjust the endpoint if your backend uses a different path
     return this.request('/social/scheduled-posts');
+  }
+
+  // Test WebSocket notification system
+  async testNotification() {
+    return this.request('/test-notification', {
+      method: 'POST',
+    });
+  }
+
+  // Debug scheduled posts timing
+  async debugScheduledPosts() {
+    return this.request('/debug/scheduled-posts');
   }
 }
 

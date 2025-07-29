@@ -1,4 +1,5 @@
 import React from 'react';
+import NotificationCenter from './NotificationCenter';
 
 function Layout({ children }) {
   return (
@@ -12,6 +13,7 @@ function Layout({ children }) {
         </div>
       </header>
       {children}
+      <NotificationCenter />
     </div>
   );
 }

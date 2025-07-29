@@ -6,7 +6,7 @@ import './igBulkComposer.css';
 import { useNavigate } from 'react-router-dom';
 
 function IgBulkComposer({ selectedAccount, onClose }) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
 
   // Strategy step state
   const [strategyData, setStrategyData] = useState({
@@ -1146,9 +1146,37 @@ function IgBulkComposer({ selectedAccount, onClose }) {
     console.log(`🗑️ Removed carousel images for row ${rowId}`);
   };
 
+  // WebSocket notification logic
+  const [wsNotification, setWsNotification] = useState(null);
+
+  useEffect(() => {
+    if (!token) return;
+    const ws = new window.WebSocket(
+      `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host.replace(/:\d+$/, '')}:${window.location.port || 8000}/ws/notifications?token=${token}`
+    );
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'scheduled_post_reminder') {
+          setWsNotification(data.message);
+        }
+      } catch (e) {}
+    };
+    ws.onerror = () => {};
+    ws.onclose = () => {};
+    return () => ws.close();
+  }, [token]);
+
   // --- RENDER ---
   return (
     <div className="ig-bulk-composer">
+      {/* WebSocket Notification Toast */}
+      {wsNotification && (
+        <div className="ig-ws-toast">
+          {wsNotification}
+          <button onClick={() => setWsNotification(null)} className="ig-toast-dismiss">Dismiss</button>
+        </div>
+      )}
       <div className="ig-bulk-composer-header">
         <h2>Instagram Bulk Composer</h2>
       </div>
