@@ -282,8 +282,34 @@ const InstagramPage = () => {
       setIsConnected(false);
       setActiveTab('connect');
       setMessage('');
+      
+      // Ensure token is set before making request
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        apiClient.setToken(token);
+        console.log('🔍 DEBUG: Token set for Instagram accounts request');
+      } else {
+        console.error('🔍 DEBUG: No auth token found in localStorage');
+        setMessage('Authentication token not found. Please log in again.');
+        return;
+      }
+      
       // Fetch new user's Instagram accounts
-      apiClient.getInstagramAccounts().then(accounts => setInstagramAccounts(accounts));
+      apiClient.getInstagramAccounts()
+        .then(accounts => {
+          console.log('🔍 DEBUG: Successfully fetched Instagram accounts:', accounts);
+          setInstagramAccounts(accounts);
+        })
+        .catch(error => {
+          console.error('🔍 DEBUG: Error fetching Instagram accounts:', error);
+          if (error.message.includes('Could not validate credentials')) {
+            setMessage('Your session has expired. Please log in again.');
+          } else if (error.message.includes('Failed to fetch')) {
+            setMessage('Unable to connect to server. Please check if the backend is running and try again.');
+          } else {
+            setMessage(`Error loading Instagram accounts: ${error.message}`);
+          }
+        });
     }
   }, [isAuthenticated]);
 

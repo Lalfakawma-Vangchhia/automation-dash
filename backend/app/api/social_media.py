@@ -299,20 +299,47 @@ async def get_social_accounts(
     db: Session = Depends(get_db)
 ):
     """Get all connected social accounts for the current user."""
-    accounts = db.query(SocialAccount).filter(
-        SocialAccount.user_id == current_user.id,
-        SocialAccount.is_connected == True
-    ).all()
-    result = []
-    for acc in accounts:
-        media_count = db.query(Post).filter(
-            Post.social_account_id == acc.id,
-            Post.status == PostStatus.PUBLISHED
-        ).count()
-        acc_dict = {**acc.__dict__, "media_count": media_count}
-        acc_dict.pop('_sa_instance_state', None)
-        result.append(SocialAccountResponse(**acc_dict))
-    return result
+    try:
+        accounts = db.query(SocialAccount).filter(
+            SocialAccount.user_id == current_user.id,
+            SocialAccount.is_connected == True
+        ).all()
+        result = []
+        for acc in accounts:
+            try:
+                media_count = db.query(Post).filter(
+                    Post.social_account_id == acc.id,
+                    Post.status == PostStatus.PUBLISHED
+                ).count()
+                
+                # Create a clean dict with proper defaults for None values
+                acc_dict = {
+                    "id": acc.id,
+                    "user_id": acc.user_id,
+                    "platform": acc.platform,
+                    "platform_user_id": acc.platform_user_id,
+                    "username": acc.username,
+                    "display_name": acc.display_name,
+                    "profile_picture_url": acc.profile_picture_url,
+                    "follower_count": acc.follower_count or 0,
+                    "account_type": acc.account_type,
+                    "is_verified": acc.is_verified or False,
+                    "is_active": acc.is_active or True,
+                    "is_connected": acc.is_connected or True,
+                    "connected_at": acc.connected_at,
+                    "last_sync_at": acc.last_sync_at,
+                    "media_count": media_count
+                }
+                
+                result.append(SocialAccountResponse(**acc_dict))
+            except Exception as e:
+                logger.error(f"Error processing social account {acc.id}: {str(e)}")
+                continue
+                
+        return result
+    except Exception as e:
+        logger.error(f"Error fetching social accounts for user {current_user.id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch social accounts: {str(e)}")
 
 
 @router.get("/social/accounts/{account_id}", response_model=SocialAccountResponse)

@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Login from './components/Login';
 import notificationService from './services/notificationService';
+import GoogleOAuthCallback from './components/GoogleOAuthCallback';
 
 // Lazy load components for better performance
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -125,6 +126,7 @@ function AppContent() {
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
+        <Route path="/auth/google/callback" element={<GoogleOAuthCallback />} />
         
         {/* Protected routes */}
         {isAuthenticated ? (

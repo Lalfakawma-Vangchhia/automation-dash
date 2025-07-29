@@ -23,12 +23,12 @@ class SocialAccountResponse(SocialAccountBase):
     user_id: int
     platform_user_id: str
     profile_picture_url: Optional[str] = None
-    follower_count: int
+    follower_count: Optional[int] = 0
     account_type: Optional[str] = None
-    is_verified: bool
-    is_active: bool
-    is_connected: bool
-    connected_at: datetime
+    is_verified: Optional[bool] = False
+    is_active: Optional[bool] = True
+    is_connected: Optional[bool] = True
+    connected_at: Optional[datetime] = None
     last_sync_at: Optional[datetime] = None
     media_count: int = 0
     

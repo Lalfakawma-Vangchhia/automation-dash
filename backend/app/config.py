@@ -58,6 +58,13 @@ class Settings(BaseSettings):
     google_drive_access_token: str | None = os.getenv("GOOGLE_DRIVE_ACCESS_TOKEN")
     google_drive_refresh_token: str | None = os.getenv("GOOGLE_DRIVE_REFRESH_TOKEN")
 
+    # Email Configuration
+    smtp_server: str | None = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+    smtp_username: str | None = os.getenv("SMTP_USERNAME")
+    smtp_password: str | None = os.getenv("SMTP_PASSWORD")
+    from_email: str | None = os.getenv("FROM_EMAIL")
+
     # Backend base URL for OAuth callbacks
     backend_base_url: str = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
 
