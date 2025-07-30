@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import apiClient from '../services/apiClient';
 import { fileToBase64 } from './FacebookUtils';
 import './BulkComposer.css';
@@ -73,6 +74,7 @@ function toISTISOString(dateStr, timeStr) {
 function BulkComposer({ selectedPage, onClose, availablePages, onPageChange }) {
 
   const { isAuthenticated } = useAuth();
+  const { addNotification } = useNotifications();
   
   // Strategy step state
   const [strategyData, setStrategyData] = useState({
@@ -924,6 +926,16 @@ function BulkComposer({ selectedPage, onClose, availablePages, onPageChange }) {
         alert(`Scheduled ${successCount} posts successfully. ${failedCount} posts failed. Check console for details.`);
       } else {
         alert(`Successfully scheduled ${successCount} posts!`);
+        
+        // Add success notification for bulk scheduling
+        if (successCount > 0) {
+          addNotification({
+            type: 'success',
+            platform: 'facebook',
+            strategyName: strategyData.promptTemplate || 'Bulk Schedule',
+            message: `Successfully scheduled ${successCount} Facebook posts! You'll receive alerts 10 minutes before each post goes live.`
+          });
+        }
       }
       
       // Reload scheduled posts to show the newly scheduled content

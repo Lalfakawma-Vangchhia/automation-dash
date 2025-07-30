@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import apiClient from '../services/apiClient';
+import { useNotifications } from './NotificationContext';
 
 const AuthContext = createContext();
 
@@ -47,6 +48,13 @@ export const AuthProvider = ({ children }) => {
       const response = await apiClient.login(email, password);
       setUser(response.user);
       setIsAuthenticated(true);
+      
+      // Trigger notification permission check after successful login
+      setTimeout(() => {
+        const event = new CustomEvent('userLoggedIn');
+        window.dispatchEvent(event);
+      }, 1000);
+      
       return response;
     } catch (error) {
       console.error('Login failed:', error);
@@ -109,23 +117,121 @@ export const AuthProvider = ({ children }) => {
       // Get Google OAuth URL from backend
       const response = await apiClient.getGoogleOAuthUrl();
       const { auth_url } = response;
-      
-      // Open popup window for Google OAuth
-      const popup = window.open(
-        auth_url,
-        'google-oauth',
-        'width=500,height=600,scrollbars=yes,resizable=yes'
-      );
-      
-      if (!popup) {
-        throw new Error('Failed to open OAuth popup. Please allow popups for this site.');
-      }
-      
+
       return new Promise((resolve, reject) => {
         let isResolved = false;
         let checkClosedInterval;
         let timeoutId;
-        
+        let popup;
+
+        // Listen for messages from the popup (sent by backend callback)
+        const messageListener = (event) => {
+          console.log('🔍 Received message:', event.data, 'from origin:', event.origin);
+
+          // Accept messages from our backend origin (both HTTP and HTTPS), and wildcard '*' for dev
+          const allowedOrigins = ['http://localhost:8000', 'https://localhost:8000', window.location.origin];
+
+          // For development, also accept messages from any origin if they have the right structure
+          const isValidMessage = event.data && (event.data.success || event.data.error);
+          const isFromAllowedOrigin = allowedOrigins.includes(event.origin) || event.origin === 'null';
+
+          if (!isFromAllowedOrigin && !isValidMessage) {
+            console.log('🔍 Ignoring message from unexpected origin:', event.origin);
+            return;
+          }
+
+          if (isResolved) {
+            console.log('🔍 Message received but already resolved, ignoring');
+            return; // Prevent multiple resolutions
+          }
+
+          // Check if this is an OAuth success message
+          if (event.data && event.data.success && event.data.access_token) {
+            console.log('✅ OAuth success received:', event.data);
+            isResolved = true;
+
+            // Clear intervals and timeouts
+            if (checkClosedInterval) {
+              clearInterval(checkClosedInterval);
+              checkClosedInterval = null;
+            }
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+
+            // Backend successfully processed OAuth and sent us the token
+            apiClient.setToken(event.data.access_token);
+            setUser(event.data.user);
+            setIsAuthenticated(true);
+            
+            // Trigger notification permission check after successful Google login
+            setTimeout(() => {
+              const loginEvent = new CustomEvent('userLoggedIn');
+              window.dispatchEvent(loginEvent);
+            }, 1000);
+
+            window.removeEventListener('message', messageListener);
+
+            // Close popup with delay to ensure message processing
+            setTimeout(() => {
+              try {
+                if (popup && !popup.closed) popup.close();
+              } catch (e) {
+                console.warn('Could not close popup:', e);
+              }
+            }, 500);
+
+            resolve(event.data);
+          } else if (event.data && event.data.error) {
+            console.log('❌ OAuth error received:', event.data.error);
+            isResolved = true;
+
+            // Clear intervals and timeouts
+            if (checkClosedInterval) {
+              clearInterval(checkClosedInterval);
+              checkClosedInterval = null;
+            }
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+
+            window.removeEventListener('message', messageListener);
+
+            setTimeout(() => {
+              try {
+                if (popup && !popup.closed) popup.close();
+              } catch (e) {
+                console.warn('Could not close popup:', e);
+              }
+            }, 500);
+
+            reject(new Error(event.data.error));
+          } else {
+            console.log('🔍 Received message with unexpected format:', event.data);
+          }
+        };
+
+        // Set up message listener BEFORE opening popup
+        window.addEventListener('message', messageListener);
+        console.log('🔍 Message listener set up');
+
+        // Open popup window for Google OAuth
+        popup = window.open(
+          auth_url,
+          'google-oauth',
+          'width=500,height=600,scrollbars=yes,resizable=yes'
+        );
+
+        if (!popup) {
+          window.removeEventListener('message', messageListener);
+          reject(new Error('Failed to open OAuth popup. Please allow popups for this site.'));
+          return;
+        }
+
+        console.log('🔍 Popup opened successfully');
+
         // Cleanup function
         const cleanup = () => {
           window.removeEventListener('message', messageListener);
@@ -138,101 +244,79 @@ export const AuthProvider = ({ children }) => {
             timeoutId = null;
           }
         };
-        
-        // Listen for messages from the popup (sent by backend callback)
-        const messageListener = (event) => {
-          console.log('Received message:', event.data, 'from origin:', event.origin);
-          
-          // Accept messages from our backend origin
-          const backendOrigin = 'https://localhost:8000';
-          if (event.origin !== backendOrigin && event.origin !== window.location.origin) {
-            console.log('Ignoring message from unexpected origin:', event.origin);
-            return;
-          }
-          
-          if (isResolved) return; // Prevent multiple resolutions
-          
-          if (event.data.success && event.data.access_token) {
-            console.log('OAuth success received:', event.data);
-            // Backend successfully processed OAuth and sent us the token
-            isResolved = true;
-            apiClient.setToken(event.data.access_token);
-            setUser(event.data.user);
-            setIsAuthenticated(true);
-            
-            cleanup();
-            try {
-              popup.close();
-            } catch (e) {
-              console.warn('Could not close popup:', e);
-            }
-            resolve(event.data);
-          } else if (event.data.error) {
-            console.log('OAuth error received:', event.data.error);
-            isResolved = true;
-            cleanup();
-            try {
-              popup.close();
-            } catch (e) {
-              console.warn('Could not close popup:', e);
-            }
-            reject(new Error(event.data.error));
-          }
-        };
-        
-        window.addEventListener('message', messageListener);
-        
-        // Simplified popup closed check - disable COOP-problematic checks
-        // Instead, rely primarily on the timeout and message listener
-        let popupCheckAttempts = 0;
-        const maxPopupCheckAttempts = 5; // Only try a few times
-        
+
+        // Handle popup closure detection - use longer delay to allow message processing
         const checkClosed = () => {
-          popupCheckAttempts++;
-          
           try {
-            // Try to access popup.closed, but don't rely on it heavily
-            if (popup.closed) {
+            if (popup && popup.closed) {
               if (!isResolved) {
-                console.log('Popup was closed by user');
-                isResolved = true;
-                cleanup();
-                reject(new Error('OAuth popup was closed by user'));
+                console.log('🔍 Popup was closed by user');
+
+                // Check localStorage for OAuth result as fallback
+                try {
+                  const oauthResult = localStorage.getItem('oauth_result');
+                  if (oauthResult) {
+                    console.log('🔍 Found OAuth result in localStorage');
+                    const result = JSON.parse(oauthResult);
+                    localStorage.removeItem('oauth_result');
+
+                    if (result.success && result.access_token) {
+                      console.log('✅ OAuth success from localStorage');
+                      isResolved = true;
+                      cleanup();
+
+                      apiClient.setToken(result.access_token);
+                      setUser(result.user);
+                      setIsAuthenticated(true);
+
+                      resolve(result);
+                      return;
+                    } else if (result.error) {
+                      console.log('❌ OAuth error from localStorage');
+                      isResolved = true;
+                      cleanup();
+                      reject(new Error(result.error));
+                      return;
+                    }
+                  }
+                } catch (e) {
+                  console.log('🔍 No valid OAuth result in localStorage');
+                }
+
+                // Wait longer before rejecting to allow any pending message events
+                setTimeout(() => {
+                  if (!isResolved) {
+                    isResolved = true;
+                    cleanup();
+                    reject(new Error('OAuth popup was closed by user'));
+                  }
+                }, 3000); // Increased delay to 3 seconds
               }
               return;
             }
           } catch (error) {
-            // COOP policy blocks access - this is expected
-            console.log('COOP policy prevents popup.closed check, attempt:', popupCheckAttempts);
-          }
-          
-          // After a few failed attempts, stop trying to check popup.closed
-          if (popupCheckAttempts >= maxPopupCheckAttempts) {
-            console.log('Stopping popup.closed checks due to COOP policy');
-            if (checkClosedInterval) {
-              clearInterval(checkClosedInterval);
-              checkClosedInterval = null;
-            }
+            // COOP policy blocks access - this is expected in secure contexts
+            console.log('🔍 COOP policy active - relying on message listener for popup status');
           }
         };
-        
-        // Start checking popup status, but be prepared for COOP failures
-        checkClosedInterval = setInterval(checkClosed, 2000); // Check every 2 seconds instead of 1
-        
-        // Shorter timeout since we can't reliably detect popup closure
+
+        // Check popup status less frequently to reduce COOP errors and allow more time for messages
+        checkClosedInterval = setInterval(checkClosed, 5000); // Check every 5 seconds
+
+        // Set a reasonable timeout for OAuth process
         timeoutId = setTimeout(() => {
           if (!isResolved) {
-            console.log('OAuth timeout reached');
+            console.log('🔍 OAuth timeout reached');
             isResolved = true;
             cleanup();
             try {
-              popup.close();
+              if (popup && !popup.closed) popup.close();
             } catch (e) {
               console.warn('Could not close popup on timeout:', e);
             }
-            reject(new Error('OAuth timeout - please try again'));
+            reject(new Error('OAuth timeout - please ensure you accept the SSL certificate and try again'));
           }
-        }, 120000); // 2 minutes instead of 5
+        }, 300000); // 5 minutes to allow for certificate acceptance and debugging
       });
     } catch (error) {
       console.error('Google OAuth failed:', error);

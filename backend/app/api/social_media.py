@@ -2847,6 +2847,13 @@ async def schedule_bulk_composer_posts(
                 db.commit()
                 db.refresh(new_post)
                 
+                # Schedule pre-posting notification (10 minutes before)
+                try:
+                    from app.services.notification_service import notification_service
+                    await notification_service.schedule_pre_posting_alert(db, new_post.id)
+                except Exception as notif_error:
+                    logger.error(f"Failed to schedule pre-posting alert: {notif_error}")
+                
                 results.append({
                     "success": True, 
                     "id": new_post.id, 
@@ -4270,7 +4277,7 @@ def get_scheduled_posts(current_user: User = Depends(get_current_user), db: Sess
     ]
 
 @router.post("/social/instagram/bulk-schedule")
-def bulk_schedule_instagram_posts(
+async def bulk_schedule_instagram_posts(
     social_account_id: int,
     posts: List[dict],
     db: Session = Depends(get_db),
@@ -4369,6 +4376,22 @@ def bulk_schedule_instagram_posts(
             })
 
     db.commit()
+    
+    # Schedule pre-posting notifications for all successfully created posts
+    try:
+        from app.services.notification_service import notification_service
+        for scheduled_post in db.query(ScheduledPost).filter(
+            ScheduledPost.user_id == current_user.id,
+            ScheduledPost.platform == "instagram",
+            ScheduledPost.status == "scheduled"
+        ).all():
+            try:
+                await notification_service.schedule_pre_posting_alert(db, scheduled_post.id)
+            except Exception as notif_error:
+                logger.error(f"Failed to schedule pre-posting alert for Instagram post {scheduled_post.id}: {notif_error}")
+    except Exception as e:
+        logger.error(f"Error scheduling pre-posting notifications: {e}")
+    
     return {
         "success": len(failed_posts) == 0,
         "scheduled_posts": scheduled_posts,

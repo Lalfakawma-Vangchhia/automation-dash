@@ -36,6 +36,8 @@ class User(Base):
     strategy_plans = relationship("StrategyPlan", back_populates="user")
     single_instagram_posts = relationship("SingleInstagramPost", back_populates="user")
     global_auto_reply_status = relationship("GlobalAutoReplyStatus", back_populates="user")
+    notifications = relationship("Notification", back_populates="user")
+    notification_preferences = relationship("NotificationPreferences", back_populates="user", uselist=False)
     
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', username='{self.username}')>" 

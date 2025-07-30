@@ -1,18 +1,28 @@
 // API Client for Backend Integration
 class ApiClient {
   constructor() {
-    // For development, you can force HTTP by uncommenting the next line:
-    // const defaultURL = 'http://localhost:8000/api';
+    // For localhost development, match the frontend protocol
+    // This ensures HTTPS frontend talks to HTTPS backend
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-    // Determine if we should use HTTPS based on the current protocol
-    const isHttps = window.location.protocol === 'https:';
-    const protocol = isHttps ? 'https:' : 'http:';
-    const defaultURL = `${protocol}//localhost:8000/api`;
+    let defaultURL;
+    if (isLocalhost) {
+      // Match the frontend protocol for localhost development
+      const protocol = window.location.protocol;
+      defaultURL = `${protocol}//localhost:8000/api`;
+    } else {
+      // For production, match the current protocol
+      const isHttps = window.location.protocol === 'https:';
+      const protocol = isHttps ? 'https:' : 'http:';
+      defaultURL = `${protocol}//localhost:8000/api`;
+    }
 
     this.baseURL = process.env.REACT_APP_API_URL || defaultURL;
     this.token = localStorage.getItem('authToken');
 
     console.log('🔍 DEBUG: API Client initialized with baseURL:', this.baseURL);
+    console.log('🔍 DEBUG: Frontend protocol:', window.location.protocol);
+    console.log('🔍 DEBUG: Backend will use same protocol for localhost');
   }
 
   setToken(token) {
@@ -173,8 +183,8 @@ class ApiClient {
   // Test connection to backend
   async testConnection() {
     try {
-      const isHttps = window.location.protocol === 'https:';
-      const protocol = isHttps ? 'https:' : 'http:';
+      // Use the same protocol as the frontend for localhost
+      const protocol = window.location.protocol;
       const healthURL = `${protocol}//localhost:8000/health`;
       console.log('Testing backend connection to:', healthURL);
       const response = await fetch(healthURL);
@@ -182,7 +192,11 @@ class ApiClient {
       return response.ok;
     } catch (error) {
       console.error('Backend connection test failed:', error);
-      console.error('This is likely due to SSL certificate issues. Please visit https://localhost:8000/health in your browser and accept the certificate.');
+      if (window.location.protocol === 'https:') {
+        console.error('This is likely due to SSL certificate issues. Please visit https://localhost:8000/health in your browser and accept the certificate.');
+      } else {
+        console.error('Make sure the backend server is running on the correct protocol.');
+      }
       return false;
     }
   }
@@ -196,13 +210,21 @@ class ApiClient {
   }
 
   async login(email, password) {
+    console.log('🔍 DEBUG: Attempting login...');
+    console.log('🔍 DEBUG: Email:', email);
+    console.log('🔍 DEBUG: API Base URL:', this.baseURL);
+    console.log('🔍 DEBUG: Full login URL:', `${this.baseURL}/auth/login`);
+    
     const response = await this.request('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
 
+    console.log('🔍 DEBUG: Login response:', response);
+
     if (response.access_token) {
       this.setToken(response.access_token);
+      console.log('🔍 DEBUG: Token set successfully');
     }
 
     return response;
@@ -414,7 +436,7 @@ class ApiClient {
   async uploadThumbnailToCloudinary(file) {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     // Use custom FormData upload method
     const url = `${this.baseURL}/social/instagram/upload-thumbnail`;
     const config = {
@@ -432,7 +454,7 @@ class ApiClient {
     try {
       console.log(`🔍 DEBUG: Uploading thumbnail to Cloudinary via ${url}`);
       const response = await fetch(url, config);
-      
+
       if (!response.ok) {
         let errorData = {};
         try {
@@ -440,7 +462,7 @@ class ApiClient {
         } catch (e) {
           console.warn('Failed to parse error response as JSON');
         }
-        
+
         let errorMessage = 'Unknown error occurred';
         if (typeof errorData === 'string') {
           errorMessage = errorData;
@@ -453,7 +475,7 @@ class ApiClient {
         } else {
           errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         }
-        
+
         throw new Error(errorMessage);
       }
 
@@ -887,6 +909,44 @@ class ApiClient {
       body: JSON.stringify(requestData),
     });
     return response;
+  }
+
+  // Notification endpoints
+  async getNotifications(limit = 50, offset = 0) {
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    params.append('offset', offset.toString());
+    
+    return this.request(`/notifications?${params.toString()}`);
+  }
+
+  async markNotificationRead(notificationId) {
+    return this.request(`/notifications/${notificationId}/mark-read`, {
+      method: 'POST',
+    });
+  }
+
+  async markAllNotificationsRead() {
+    return this.request('/notifications/mark-all-read', {
+      method: 'POST',
+    });
+  }
+
+  async getNotificationPreferences() {
+    return this.request('/notification-preferences');
+  }
+
+  async updateNotificationPreferences(preferences) {
+    return this.request('/notification-preferences', {
+      method: 'PUT',
+      body: JSON.stringify(preferences),
+    });
+  }
+
+  async testNotification() {
+    return this.request('/test-notification', {
+      method: 'POST',
+    });
   }
 
   // Bulk Composer - Schedule multiple posts for Instagram

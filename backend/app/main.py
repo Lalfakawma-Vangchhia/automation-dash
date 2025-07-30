@@ -48,6 +48,11 @@ async def log_requests(request: Request, call_next):
     
     response = await call_next(request)
     
+    # Only add COOP headers for OAuth callback routes to avoid interfering with other requests
+    if "/auth/google/callback" in str(request.url):
+        response.headers["Cross-Origin-Opener-Policy"] = "unsafe-none"
+        response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
+    
     # Log response details
     process_time = time.time() - start_time
     logger.info(f"🔍 RESPONSE: {response.status_code} - {process_time:.4f}s")
@@ -218,6 +223,10 @@ app.include_router(ai.router, prefix="/api")
 app.include_router(google_drive.router)
 app.include_router(webhook.router, prefix="/api")
 app.include_router(google_oauth.router, prefix="/api")
+
+# Import and include notification router
+from app.api import notifications
+app.include_router(notifications.router, prefix="/api")
 
 
 # Error handlers

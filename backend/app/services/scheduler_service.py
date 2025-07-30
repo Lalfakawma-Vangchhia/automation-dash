@@ -12,6 +12,7 @@ from app.services.facebook_service import facebook_service
 from app.services.auto_reply_service import auto_reply_service
 from app.services.instagram_service import instagram_service
 from app.services.cloudinary_service import cloudinary_service
+from app.services.notification_service import notification_service
 import pytz
 from pytz import timezone, UTC
 import base64
@@ -342,12 +343,51 @@ class SchedulerService:
                     # Save the Instagram post/media ID
                     scheduled_post.post_id = result.get("post_id") or result.get("creation_id")
                     logger.info(f"✅ Successfully posted scheduled {post_type} to Instagram: {scheduled_post.id}, post_id: {scheduled_post.post_id}")
+                    
+                    # Send success notification
+                    try:
+                        strategy_name = scheduled_post.strategy_plan.name if scheduled_post.strategy_plan else "Scheduled Post"
+                        await notification_service.send_success_notification(
+                            db=db,
+                            post_id=scheduled_post.id,
+                            platform="instagram",
+                            strategy_name=strategy_name
+                        )
+                    except Exception as notif_error:
+                        logger.error(f"Failed to send success notification: {notif_error}")
                 else:
                     scheduled_post.status = "failed"
-                    logger.error(f"❌ Failed to post {post_type} to Instagram: {result.get('error')}")
+                    error_message = result.get('error', 'Unknown error occurred')
+                    logger.error(f"❌ Failed to post {post_type} to Instagram: {error_message}")
+                    
+                    # Send failure notification
+                    try:
+                        strategy_name = scheduled_post.strategy_plan.name if scheduled_post.strategy_plan else "Scheduled Post"
+                        await notification_service.send_failure_notification(
+                            db=db,
+                            post_id=scheduled_post.id,
+                            platform="instagram",
+                            strategy_name=strategy_name,
+                            error=error_message
+                        )
+                    except Exception as notif_error:
+                        logger.error(f"Failed to send failure notification: {notif_error}")
             except Exception as ig_error:
                 logger.error(f"Instagram posting error: {ig_error}")
                 scheduled_post.status = "failed"
+                
+                # Send failure notification for exceptions
+                try:
+                    strategy_name = scheduled_post.strategy_plan.name if scheduled_post.strategy_plan else "Scheduled Post"
+                    await notification_service.send_failure_notification(
+                        db=db,
+                        post_id=scheduled_post.id,
+                        platform="instagram",
+                        strategy_name=strategy_name,
+                        error=str(ig_error)
+                    )
+                except Exception as notif_error:
+                    logger.error(f"Failed to send failure notification: {notif_error}")
             
             scheduled_post.is_active = False
             scheduled_post.last_executed = datetime.utcnow()

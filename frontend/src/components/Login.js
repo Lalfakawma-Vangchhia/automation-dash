@@ -140,16 +140,14 @@ function Login() {
 
     setGoogleLoading(true);
     setMessage('');
-    
+
     try {
       console.log('Attempting Google OAuth login...');
       const response = await loginWithGoogle();
       console.log('Google OAuth response:', response);
-      
-      setMessage(response.is_new_user ? 'Account created and logged in successfully!' : 'Login successful!');
-      
-      // Navigate to dashboard after successful login
-      navigate('/');
+
+      // Force reload to ensure global state is updated
+      window.location.href = '/';
     } catch (error) {
       console.error('Google OAuth error:', error);
       setMessage(`Error: ${error.message}`);

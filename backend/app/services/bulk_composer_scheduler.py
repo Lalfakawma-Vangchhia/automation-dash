@@ -7,6 +7,7 @@ from app.models.bulk_composer_content import BulkComposerContent, BulkComposerSt
 from app.models.social_account import SocialAccount
 from app.services.facebook_service import facebook_service
 from app.services.cloudinary_service import cloudinary_service
+from app.services.notification_service import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -116,8 +117,32 @@ class BulkComposerScheduler:
                 post.facebook_post_id = result.get('post_id')
                 post.error_message = None
                 logger.info(f"✅ Successfully published post {post.id} to Facebook: {result.get('post_id')}")
+                
+                # Send success notification
+                try:
+                    await notification_service.send_success_notification(
+                        db=db,
+                        post_id=post.id,
+                        platform="facebook",
+                        strategy_name="Bulk Scheduled Post"
+                    )
+                except Exception as notif_error:
+                    logger.error(f"Failed to send success notification: {notif_error}")
             else:
                 logger.error(f"❌ Failed to publish post {post.id}: Facebook response: {result}")
+                error_message = result.get('error', 'Unknown error occurred') if result else 'No response from Facebook'
+                
+                # Send failure notification
+                try:
+                    await notification_service.send_failure_notification(
+                        db=db,
+                        post_id=post.id,
+                        platform="facebook",
+                        strategy_name="Bulk Scheduled Post",
+                        error=error_message
+                    )
+                except Exception as notif_error:
+                    logger.error(f"Failed to send failure notification: {notif_error}")
                 fb_error = result.get('error') if isinstance(result, dict) else str(result)
                 post.status = BulkComposerStatus.FAILED.value
                 post.error_message = f"Facebook API error: {fb_error or 'No post ID returned'}"

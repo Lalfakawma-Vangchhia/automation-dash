@@ -60,6 +60,19 @@ async def get_current_user(
         raise credentials_exception
     return user
 
+async def get_user_from_token(token: str, db: Session):
+    """Get user from JWT token for WebSocket authentication"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            return None
+        
+        user = db.query(User).filter(User.email == email).first()
+        return user
+    except JWTError:
+        return None
+
 @router.post("/register", response_model=dict)
 def register(user: UserCreate, db: Session = Depends(get_db)):
     # Check if user already exists

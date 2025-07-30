@@ -295,35 +295,104 @@ async def google_oauth_redirect_callback(
     """Handle Google OAuth redirect callback and redirect to frontend."""
     from fastapi.responses import HTMLResponse
     
+    logger.info(f"🔍 Google OAuth callback received - Code: {'Present' if code else 'Missing'}, Error: {error}")
+    
     if error:
+        logger.error(f"❌ Google OAuth error: {error}")
         # Redirect to frontend with error
-        return HTMLResponse(f"""
+        response = HTMLResponse(f"""
             <html><body>
                 <script>
-                    window.opener.postMessage({{error: '{error}'}}, '*');
-                    window.close();
+                    console.log('OAuth error received:', '{error}');
+                    const message = {{error: '{error}'}};
+                    
+                    function sendErrorMessage() {{
+                        try {{
+                            if (window.opener && !window.opener.closed) {{
+                                const origins = ['https://localhost:3000', 'http://localhost:3000', '*'];
+                                origins.forEach(origin => {{
+                                    try {{
+                                        console.log('Posting error to origin:', origin);
+                                        window.opener.postMessage(message, origin);
+                                    }} catch (e) {{
+                                        console.log('Failed to post error to origin:', origin, e);
+                                    }}
+                                }});
+                            }}
+                        }} catch (e) {{
+                            console.log('Error sending message:', e);
+                        }}
+                    }}
+                    
+                    // Send immediately and with delay
+                    sendErrorMessage();
+                    setTimeout(sendErrorMessage, 1000);
+                    
+                    setTimeout(() => window.close(), 3000);
                 </script>
-                <p>Authentication failed: {error}. You may close this window.</p>
+                <p>Authentication failed: {error}. This window will close automatically.</p>
             </body></html>
         """)
+        
+        # Remove COOP headers that might interfere
+        response.headers["Cross-Origin-Opener-Policy"] = "unsafe-none"
+        response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
+        
+        return response
     
     if not code:
-        return HTMLResponse("""
+        logger.error("❌ No authorization code received from Google")
+        response = HTMLResponse("""
             <html><body>
                 <script>
-                    window.opener.postMessage({error: 'No authorization code received'}, '*');
-                    window.close();
+                    console.log('No authorization code received');
+                    const message = {error: 'No authorization code received'};
+                    
+                    function sendErrorMessage() {
+                        try {
+                            if (window.opener && !window.opener.closed) {
+                                const origins = ['https://localhost:3000', 'http://localhost:3000', '*'];
+                                origins.forEach(origin => {
+                                    try {
+                                        console.log('Posting no-code error to origin:', origin);
+                                        window.opener.postMessage(message, origin);
+                                    } catch (e) {
+                                        console.log('Failed to post error to origin:', origin, e);
+                                    }
+                                });
+                            }
+                        } catch (e) {
+                            console.log('Error sending message:', e);
+                        }
+                    }
+                    
+                    // Send immediately and with delay
+                    sendErrorMessage();
+                    setTimeout(sendErrorMessage, 1000);
+                    
+                    setTimeout(() => window.close(), 3000);
                 </script>
-                <p>Authentication failed. You may close this window.</p>
+                <p>Authentication failed. This window will close automatically.</p>
             </body></html>
         """)
+        
+        # Remove COOP headers that might interfere
+        response.headers["Cross-Origin-Opener-Policy"] = "unsafe-none"
+        response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
+        
+        return response
     
     try:
+        logger.info("🔍 Starting OAuth token exchange process...")
+        
         # Get the redirect URI that was used for the OAuth request
         redirect_uri = f"{settings.backend_base_url}/api/auth/google/callback"
+        logger.info(f"🔍 Using redirect URI: {redirect_uri}")
         
         # Exchange code for access token
+        logger.info("🔍 Exchanging code for access token...")
         token_response = await exchange_code_for_token(code, redirect_uri)
+        logger.info("✅ Token exchange successful")
         
         access_token = token_response.get("access_token")
         refresh_token = token_response.get("refresh_token")
@@ -432,21 +501,118 @@ async def google_oauth_redirect_callback(
         import json
         user_data_json = json.dumps(user_data)
         
-        return HTMLResponse(f"""
+        # Create response with proper headers for popup communication
+        response = HTMLResponse(f"""
             <html><body>
                 <script>
-                    window.opener.postMessage({{
+                    console.log('🔍 OAuth callback page loaded');
+                    console.log('🔍 Window opener available:', !!window.opener);
+                    console.log('🔍 Window opener closed:', window.opener ? window.opener.closed : 'N/A');
+                    
+                    const message = {{
                         success: true,
                         access_token: '{jwt_token}',
                         token_type: 'bearer',
                         user: {user_data_json},
                         is_new_user: {str(is_new_user).lower()}
-                    }}, 'https://localhost:3000');
-                    window.close();
+                    }};
+                    
+                    console.log('🔍 Preparing to send success message:', message);
+                    console.log('🔍 Message size:', JSON.stringify(message).length, 'characters');
+                    
+                    // Function to send message with retry logic
+                    function sendMessage() {{
+                        let messageSent = false;
+                        let attempts = 0;
+                        const maxAttempts = 10;
+                        
+                        function attemptSend() {{
+                            attempts++;
+                            console.log(`🔍 Attempt ${{attempts}} to send message`);
+                            
+                            try {{
+                                if (window.opener && !window.opener.closed) {{
+                                    console.log('🔍 Opener window is available and open');
+                                    
+                                    // Try multiple origins for compatibility
+                                    const origins = [
+                                        'https://localhost:3000',
+                                        'http://localhost:3000',
+                                        window.location.origin,
+                                        '*'
+                                    ];
+                                    
+                                    origins.forEach(origin => {{
+                                        try {{
+                                            console.log(`🔍 Posting to origin: ${{origin}}`);
+                                            window.opener.postMessage(message, origin);
+                                            messageSent = true;
+                                            console.log(`✅ Message sent to: ${{origin}}`);
+                                        }} catch (e) {{
+                                            console.log(`❌ Failed to post to origin ${{origin}}:`, e);
+                                        }}
+                                    }});
+                                    
+                                    if (messageSent) {{
+                                        console.log('✅ OAuth success message sent successfully');
+                                        return true;
+                                    }}
+                                }} else {{
+                                    console.log('❌ No opener window available or opener is closed');
+                                    console.log('🔍 window.opener:', !!window.opener);
+                                    console.log('🔍 window.opener.closed:', window.opener ? window.opener.closed : 'N/A');
+                                }}
+                            }} catch (e) {{
+                                console.log(`❌ Error in attempt ${{attempts}}:`, e);
+                            }}
+                            
+                            // Retry if not successful and haven't exceeded max attempts
+                            if (!messageSent && attempts < maxAttempts) {{
+                                console.log(`🔄 Retrying in 1000ms (attempt ${{attempts + 1}}/${{maxAttempts}})`);
+                                setTimeout(attemptSend, 1000);
+                            }} else if (!messageSent) {{
+                                console.log('❌ Failed to send message after all attempts');
+                                // Try localStorage as fallback
+                                try {{
+                                    console.log('🔍 Trying localStorage fallback');
+                                    localStorage.setItem('oauth_result', JSON.stringify(message));
+                                    console.log('✅ Stored OAuth result in localStorage');
+                                }} catch (e) {{
+                                    console.log('❌ localStorage fallback failed:', e);
+                                }}
+                            }}
+                            
+                            return messageSent;
+                        }}
+                        
+                        return attemptSend();
+                    }}
+                    
+                    // Start sending message immediately
+                    sendMessage();
+                    
+                    // Also try sending after a short delay in case the parent isn't ready
+                    setTimeout(() => {{
+                        console.log('🔍 Delayed message send attempt');
+                        sendMessage();
+                    }}, 1000);
+                    
+                    // Close window after sufficient delay to ensure message delivery
+                    setTimeout(() => {{
+                        console.log('🔍 Closing popup window');
+                        window.close();
+                    }}, 5000);
                 </script>
-                <p>Authentication successful! You may close this window.</p>
+                <p>Authentication successful! This window will close automatically.</p>
+                <p>If this window doesn't close, you can close it manually.</p>
             </body></html>
         """)
+        
+        # Remove COOP headers that might interfere with popup communication
+        response.headers["Cross-Origin-Opener-Policy"] = "unsafe-none"
+        response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
+        
+        return response
         
     except Exception as e:
         import traceback
@@ -455,12 +621,40 @@ async def google_oauth_redirect_callback(
         logger.error(f"Full traceback: {error_details}")
         
         db.rollback()
-        return HTMLResponse(f"""
+        response = HTMLResponse(f"""
             <html><body>
                 <script>
-                    window.opener.postMessage({{error: 'OAuth authentication failed: {str(e)}'}}, '*');
-                    window.close();
+                    const message = {{error: 'OAuth authentication failed: {str(e)}'}};
+                    
+                    function sendErrorMessage() {{
+                        try {{
+                            if (window.opener && !window.opener.closed) {{
+                                const origins = ['https://localhost:3000', 'http://localhost:3000', '*'];
+                                origins.forEach(origin => {{
+                                    try {{
+                                        window.opener.postMessage(message, origin);
+                                    }} catch (e) {{
+                                        console.log('Failed to post error to origin:', origin, e);
+                                    }}
+                                }});
+                            }}
+                        }} catch (e) {{
+                            console.log('Error sending message:', e);
+                        }}
+                    }}
+                    
+                    // Send immediately and with delay
+                    sendErrorMessage();
+                    setTimeout(sendErrorMessage, 1000);
+                    
+                    setTimeout(() => window.close(), 3000);
                 </script>
-                <p>Authentication failed: {str(e)}. You may close this window.</p>
+                <p>Authentication failed: {str(e)}. This window will close automatically.</p>
             </body></html>
         """)
+        
+        # Remove COOP headers that might interfere
+        response.headers["Cross-Origin-Opener-Policy"] = "unsafe-none"
+        response.headers["Cross-Origin-Embedder-Policy"] = "unsafe-none"
+        
+        return response

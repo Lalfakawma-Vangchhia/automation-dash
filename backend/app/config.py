@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     from_email: str | None = os.getenv("FROM_EMAIL")
 
     # Backend base URL for OAuth callbacks
-    backend_base_url: str = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
+    backend_base_url: str = os.getenv("BACKEND_BASE_URL", "https://localhost:8000")
 
     # Environment
     environment: str = os.getenv("ENVIRONMENT", "development")

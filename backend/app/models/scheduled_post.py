@@ -62,6 +62,7 @@ class ScheduledPost(Base):
     # Relationships
     user = relationship("User", back_populates="scheduled_posts")
     social_account = relationship("SocialAccount", back_populates="scheduled_posts")
+    notifications = relationship("Notification", back_populates="scheduled_post")
     
     def __repr__(self):
         return f"<ScheduledPost(id={self.id}, prompt='{self.prompt[:50]}...', post_type={self.post_type.value}, frequency={self.frequency.value})>"

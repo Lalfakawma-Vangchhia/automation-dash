@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
+import apiClient from '../services/apiClient';
 
 function Dashboard() {
   const [hoveredCard, setHoveredCard] = useState(null);
   const navigate = useNavigate();
   const { logout, user } = useAuth();
+  const { addNotification } = useNotifications();
 
   const automationModules = [
     {
@@ -92,6 +95,33 @@ function Dashboard() {
     }
   };
 
+  // Test notification function
+  const testNotification = async () => {
+    try {
+      // Test backend notification creation
+      const response = await apiClient.testNotification();
+      
+      if (response.success) {
+        console.log('✅ Backend test notification created successfully');
+        alert('✅ Backend test notification created! Check the notification bell.');
+      } else {
+        console.error('❌ Backend test notification failed');
+        alert('❌ Backend test notification failed');
+      }
+    } catch (error) {
+      console.error('❌ Error creating backend test notification:', error);
+      alert('❌ Error creating backend test notification: ' + error.message);
+    }
+    
+    // Also add a frontend test notification
+    addNotification({
+      type: 'pre_posting',
+      platform: 'instagram',
+      strategyName: 'Frontend Test',
+      message: 'This is a frontend test notification to verify the UI is working properly.'
+    });
+  };
+
   return (
     <main className="dashboard-main">
       <div className="dashboard-header">
@@ -104,7 +134,14 @@ function Dashboard() {
           </div>
           <span className="user-name">{user?.full_name || 'User'}</span>
         </div>
-        <div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            className="logout-btn" 
+            onClick={testNotification}
+            style={{ background: '#10b981', marginRight: '10px' }}
+          >
+            Test Notification
+          </button>
           <button className="logout-btn" onClick={handleLogout}>
             <svg width="16" height="16" viewBox="0 0 0 0" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

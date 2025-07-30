@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import apiClient from '../services/apiClient';
 import { fileToBase64 } from './FacebookUtils';
 import './igBulkComposer.css';
@@ -7,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 
 function IgBulkComposer({ selectedAccount, onClose }) {
   const { user } = useAuth();
+  const { addNotification } = useNotifications();
 
   // Strategy step state
   const [strategyData, setStrategyData] = useState({
@@ -92,7 +94,11 @@ function IgBulkComposer({ selectedAccount, onClose }) {
     let rowCount = 0;
 
     if (!endDate) {
-      const formattedDate = startDate.toISOString().split('T')[0];
+      // Format as YYYY-MM-DD using local date parts (same as multi-day logic)
+      const yyyy = startDate.getFullYear();
+      const mm = String(startDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(startDate.getDate()).padStart(2, '0');
+      const formattedDate = `${yyyy}-${mm}-${dd}`;
       rows.push({
         id: `row-0`,
         caption: '',
@@ -1028,6 +1034,19 @@ function IgBulkComposer({ selectedAccount, onClose }) {
           });
         }
         alert(errorMsg);
+        
+        // Add success notification for Instagram bulk scheduling
+        if (successCount > 0) {
+          const selectedTemplate = promptTemplates.find(t => t.prompt === strategyData.promptTemplate);
+          const strategyName = selectedTemplate ? selectedTemplate.name : 'Bulk Schedule';
+          
+          addNotification({
+            type: 'success',
+            platform: 'instagram',
+            strategyName: strategyName,
+            message: `Successfully scheduled ${successCount} Instagram posts! You'll receive alerts 10 minutes before each post goes live.`
+          });
+        }
         setComposerRows(prev =>
           prev.map(row => {
             const result = response.results.find(r => r.caption === row.caption && r.scheduled_date === row.scheduledDate);

@@ -10,3 +10,4 @@ from .dm_auto_reply_status import DmAutoReplyStatus
 from .instagram_auto_reply_log import InstagramAutoReplyLog
 from app.database import Base
 from .single_instagram_post import SingleInstagramPost
+from .notification import Notification, NotificationPreferences
